@@ -43,6 +43,9 @@ async def interactive_map(requests: fastapi.requests.Request):
 @app.get('/license')
 async def license(requests: fastapi.requests.Request):
     return fastapi.responses.FileResponse('assets/license.html')
+@app.get('/favicon.ico')
+async def favicon_item(requests: fastapi.requests.Request):
+    return fastapi.responses.FileResponse('assets/favicon.ico')
 @app.get('/weatherstat')
 async def weatherstat(requests: fastapi.requests.Request):
     return fastapi.responses.FileResponse('assets/weather_statistics.html')
