@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <title>Weather Station - Interactive Pressure Map</title>
+  <link rel="stylesheet" href="/assets/bootstrap.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+  <style>
+    .time-select {
+      margin-right: 10px; 
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg bg-primary" data-bs-theme="dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">Weather Station</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarColor01" aria-controls="navbarColor01" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarColor01">
+        <ul class="navbar-nav me-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="/">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" href="/intmap">Interactive Historical Pressure Map</a>
+            <span class="visually-hidden">(current)</span>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/comparison">Compare Weather Data</a>
+          </li>
+          
+          <li class="nav-item">
+            <a href="/weatherstat" class="nav-link">Weather Statistics</a>
+          </li>
+        
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mt-3"> 
+    <div class="row">
+      <div class="col-md-4"> 
+        <label for="date-select">Date:</label>
+        <input type="date" id="date-select" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label for="time-select">Time:</label>
+        <select id="time-select" class="form-select time-select">
+          </select>
+      </div>
+      <div class="col-md-5"> </div> 
+    </div>
+  </div>
+
+  <div id="map" style="height: 800px;"></div>
+  <a href="https://open-meteo.com/">Weather data by Open-Meteo.com</a>
+  <script>
+    // Populate time select options
+    const timeSelect = document.getElementById('time-select');
+    for (let hour = 1; hour <= 24; hour++) {
+      const option = document.createElement('option');
+      const formattedHour = hour.toString().padStart(2, '0');
+      option.value = formattedHour + ':00'; 
+      option.text = formattedHour + ':00';
+      timeSelect.add(option);
+    }
+
+    // Fetch data from output_data.json
+    fetch('/assets/output_data.json')
+      .then(response => response.json())
+      .then(data => {
+        // Initialize the map
+        const map = L.map('map').setView([37.0902, -95.7129], 4); 
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Function to determine marker color based on pressure
+        function getColor(pressure) {
+          if (pressure > 1013.25) {
+            return 'blue';
+          } else if (pressure <= 1013.25) {
+            return 'red';
+          } else {
+            return 'green';
+          }
+        }
+
+        // Function to update map markers based on selected date and time
+        function updateMap() {
+  const selectedDate = document.getElementById('date-select').value;
+  const selectedTime = document.getElementById('time-select').value;
+  const selectedDateTime = `${selectedDate}T${selectedTime}`;
+
+  // Convert the data object to array while preserving city names
+  const filteredData = Object.entries(data)
+    .filter(([cityName, cityData]) => {
+      const hourlyData = cityData.hourly;
+      // Find the index of the matching datetime in the time array
+      const dateIndex = hourlyData.time.findIndex(timeString => 
+        timeString === selectedDateTime
+      );
+      // Only include points where we found a matching time
+      return dateIndex !== -1;
+    })
+    .map(([cityName, cityData]) => {
+      const dateIndex = cityData.hourly.time.findIndex(timeString => 
+        timeString === selectedDateTime
+      );
+      
+      // Return the properly structured data object with city name from the key
+      return {
+        city: cityName,
+        latitude: cityData.latitude,
+        longitude: cityData.longitude,
+        pressure: cityData.hourly.pressure_msl[dateIndex]
+      };
+    });
+
+  // Clear existing markers 
+  map.eachLayer(layer => {
+    if (layer instanceof L.CircleMarker) {
+      map.removeLayer(layer);
+    }
+  });
+
+  // Add markers for the filtered data
+  filteredData.forEach(point => {
+    L.circleMarker([point.latitude, point.longitude], {
+      radius: 8,
+      fillColor: getColor(point.pressure),
+      color: '#000',
+      weight: 1,
+      opacity: 1,
+      fillOpacity: 0.8
+    }).addTo(map)
+      .bindPopup(`<b>${point.city}</b><br>Pressure: ${point.pressure} hPa`);
+  });
+}
+
+        // Add event listeners to date and time selectors
+        document.getElementById('date-select').addEventListener('change', updateMap);
+        document.getElementById('time-select').addEventListener('change', updateMap);
+
+      })
+      .catch(error => console.error('Error fetching data:', error)); 
+  </script>
+</body>
+</html>

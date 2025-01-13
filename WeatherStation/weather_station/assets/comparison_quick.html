@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Station</title>
+    <script src="/assets/script.js"></script>
+    <link rel="stylesheet" href="/assets/bootstrap.min.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        .container {
+            margin-top: 20px;
+        }
+        #plotDiv {
+            width: 100%;
+            height: 500px;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg bg-primary" data-bs-theme="dark">
+        <div class="container-fluid">
+          <a class="navbar-brand" href="#">Weather Station</a>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarColor01" aria-controls="navbarColor01" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse" id="navbarColor01">
+            <ul class="navbar-nav me-auto">
+              <li class="nav-item">
+                <a class="nav-link" href="/">Home</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="/intmap">Interactive Historical Pressure Map</a>
+                <span class="visually-hidden">(current)</span>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link active" href="/comparison">Compare Weather Data</a>
+              </li>
+              
+              <li class="nav-item">
+                <a href="/weatherstat" class="nav-link ">Weather Statistics</a>
+              </li>
+            
+            </ul>
+          </div>
+        </div>
+      </nav>
+
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <label for="param1" class="form-label">Parameter 1 (Hourly):</label>
+                <select id="param1" class="form-select">
+                    <!-- Will be populated from weatherParams -->
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="param2" class="form-label">Parameter 2 (Hourly):</label>
+                <select id="param2" class="form-select">
+                    <!-- Will be populated from weatherParams -->
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="location" class="form-label">Location:</label>
+                <select id="location" class="form-select">
+                    <!-- Will be populated with locations from JSON -->
+                </select>
+            </div>
+        </div>
+        <div id="plotDiv"></div>
+    </div>
+    <a href="https://open-meteo.com/">Weather data by Open-Meteo.com</a>
+    <script>
+        // Weather parameters mapping
+        const weatherParams = {
+            'temperature_2m': 'Temperature (°C)',
+            'pressure_msl': 'Pressure (hPa)',
+            'relative_humidity_2m': 'Relative Humidity (%)',
+            'wind_speed_10m': 'Wind Speed (km/h)',
+            'relative_humidity_2m':"Relative Humidity (%)",
+            "dew_point_2m":"Dew Point (2m, C)",
+            "apparent_temperature":"Apparent Temperature",
+            "precipitation_probability":"Precipitation Probability (%)",
+            "precipitation":"Precipitation (mm)",
+            "rain":"Rain (mm)",
+            "showers":"Showers: (mm)",
+            "snowfall": "Snowfall (cm)",
+            "snow_depth": "Snow Depth (meters)",
+            "pressure_msl": "Pressure (hPA)",
+            "surface_pressure":"Surface Pressure (hPA)",
+            "cloud_cover":"Cloud Cover (%)",
+            "wind_speed_10m": "Wind Speed (10m, km/h)",
+            "wind_direction_10m": "Wind Direction (10m, degrees)",
+            "soil_temperature_0cm": "Soil Temperature (C)",
+            "soil_moisture_0_to_1cm": "Soil Moisture (%)"
+        };
+
+
+        // Get DOM elements
+        const param1Select = document.getElementById('param1');
+        const param2Select = document.getElementById('param2');
+        const locationSelect = document.getElementById('location');
+        const plotDiv = document.getElementById('plotDiv');
+
+        // Function to update the plot
+        function updatePlot(data) {
+            const selectedLocation = locationSelect.value;
+            const param1 = param1Select.value;
+            const param2 = param2Select.value;
+
+            const locationData = data[selectedLocation].hourly;
+
+            const trace1 = {
+                x: locationData.time,
+                y: locationData[param1],
+                name: weatherParams[param1],
+                type: 'scatter'
+            };
+
+            const trace2 = {
+                x: locationData.time,
+                y: locationData[param2],
+                name: weatherParams[param2],
+                yaxis: 'y2',
+                type: 'scatter'
+            };
+
+            const layout = {
+                title: `Weather Parameters Comparison for ${selectedLocation}`,
+                xaxis: { title: 'Time' },
+                yaxis: { 
+                    title: weatherParams[param1],
+                    side: 'left'
+                },
+                yaxis2: {
+                    title: weatherParams[param2],
+                    overlaying: 'y',
+                    side: 'right'
+                },
+                showlegend: true,
+                legend: {
+                    x: 0,
+                    y: 1
+                }
+            };
+
+            Plotly.newPlot(plotDiv, [trace1, trace2], layout);
+        }
+
+        // Function to populate parameter selects
+        function populateParamSelects() {
+            // Clear existing options
+            param1Select.innerHTML = '';
+            param2Select.innerHTML = '';
+
+            // Add options for each weather parameter
+            Object.entries(weatherParams).forEach(([value, label]) => {
+                const option1 = document.createElement('option');
+                option1.value = value;
+                option1.textContent = label;
+                param1Select.appendChild(option1);
+
+                const option2 = document.createElement('option');
+                option2.value = value;
+                option2.textContent = label;
+                param2Select.appendChild(option2);
+            });
+
+            // Set default values (first and second options)
+            param2Select.selectedIndex = 1;
+        }
+
+        // Fetch and initialize data
+        fetch('/assets/output_data.json')
+            .then(response => response.json())
+            .then(data => {
+                // Populate location select
+                const locations = Object.keys(data);
+                locations.forEach(location => {
+                    const option = document.createElement('option');
+                    option.value = location;
+                    option.textContent = location;
+                    locationSelect.appendChild(option);
+                });
+
+                // Populate parameter selects
+                populateParamSelects();
+
+                // Add event listeners
+                param1Select.addEventListener('change', () => updatePlot(data));
+                param2Select.addEventListener('change', () => updatePlot(data));
+                locationSelect.addEventListener('change', () => updatePlot(data));
+
+                // Initial plot
+                updatePlot(data);
+            })
+            .catch(error => console.error('Error loading data:', error));
+    </script>
+</body>
+</html>
