@@ -103,12 +103,10 @@
                             <div class="col-6">
                                 <p>Mean: <span id="param2Mean" class="stats-value">-</span></p>
                                 <p>Median: <span id="param2Median" class="stats-value">-</span></p>
-                                <p>Mode: <span id="param2Mode" class="stats-value">-</span></p>
                             </div>
                             <div class="col-6">
                                 <p>Min: <span id="param2Min" class="stats-value">-</span></p>
                                 <p>Max: <span id="param2Max" class="stats-value">-</span></p>
-                                <p>Std Dev: <span id="param2StdDev" class="stats-value">-</span></p>
                             </div>
                         </div>
                     </div>
@@ -116,15 +114,7 @@
                 </div>
             </div>
     
-            <div class="row mt-4">
-                <div class="col-12">
-                    <h4>Correlation Analysis</h4>
-                    <div class="stats-card">
-                        <p>Pearson Correlation: <span id="correlation" class="stats-value">-</span></p>
-                        <div id="scatterPlot"></div>
-                    </div>
-                </div>
-            </div>
+           
         </div>
     
         <script>
@@ -176,11 +166,7 @@
                 return modeValue;
             }
     
-            function stdDev(arr) {
-                const avg = mean(arr);
-                const squareDiffs = arr.map(value => Math.pow(value - avg, 2));
-                return Math.sqrt(mean(squareDiffs));
-            }
+          
     
             function correlation(x, y) {
                 const meanX = mean(x);
@@ -213,7 +199,6 @@
                 document.getElementById('param1Mode').textContent = mode(param1Data).toFixed(2);
                 document.getElementById('param1Min').textContent = Math.min(...param1Data).toFixed(2);
                 document.getElementById('param1Max').textContent = Math.max(...param1Data).toFixed(2);
-                document.getElementById('param1StdDev').textContent = stdDev(param1Data).toFixed(2);
     
                 // Parameter 2 statistics
                 document.getElementById('param2Mean').textContent = mean(param2Data).toFixed(2);
@@ -221,11 +206,8 @@
                 document.getElementById('param2Mode').textContent = mode(param2Data).toFixed(2);
                 document.getElementById('param2Min').textContent = Math.min(...param2Data).toFixed(2);
                 document.getElementById('param2Max').textContent = Math.max(...param2Data).toFixed(2);
-                document.getElementById('param2StdDev').textContent = stdDev(param2Data).toFixed(2);
     
-                // Correlation
-                document.getElementById('correlation').textContent = correlation(param1Data, param2Data).toFixed(3);
-    
+                
                 // Update visualizations
                 updateVisualizations(param1Data, param2Data);
             }
