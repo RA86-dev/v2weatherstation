@@ -120,25 +120,27 @@
         <script>
             // Weather parameters mapping
             const weatherParams = {
-                'temperature_2m': 'Temperature (°C)',
-                'pressure_msl': 'Pressure (hPa)',
-                'relative_humidity_2m': 'Relative Humidity (%)',
-                'dew_point_2m': 'Dew Point (2m, C)',
-                'apparent_temperature': 'Apparent Temperature',
-                'precipitation_probability': 'Precipitation Probability (%)',
-                'precipitation': 'Precipitation (mm)',
-                'rain': 'Rain (mm)',
-                'showers': 'Showers (mm)',
-                'snowfall': 'Snowfall (mm)',
-                'snow_depth': 'Snow Depth (cm)',
-                'surface_pressure': 'Surface Pressure (hPA)',
-                'cloud_cover': 'Cloud Cover (%)',
-                'wind_speed_10m': 'Wind Speed (10m, km/h)',
-                'wind_direction_10m': 'Wind Direction (10m, degrees)',
-                'soil_temperature_0cm': 'Soil Temperature (C)',
-                'soil_moisture_0_to_1cm': 'Soil Moisture (%)'
-            };
-    
+            'temperature_2m': 'Temperature (°C)',
+            'pressure_msl': 'Pressure (hPa)',
+            'relative_humidity_2m': 'Relative Humidity (%)',
+            'wind_speed_10m': 'Wind Speed (km/h)',
+            'relative_humidity_2m':"Relative Humidity (%)",
+            "dew_point_2m":"Dew Point (2m, C)",
+            "apparent_temperature":"Apparent Temperature",
+            "precipitation_probability":"Precipitation Probability (%)",
+            "precipitation":"Precipitation (mm)",
+            "rain":"Rain (mm)",
+            "showers":"Showers: (mm)",
+            "snowfall": "Snowfall (cm)",
+            "snow_depth": "Snow Depth (meters)",
+            "pressure_msl": "Pressure (hPA)",
+            "surface_pressure":"Surface Pressure (hPA)",
+            "cloud_cover":"Cloud Cover (%)",
+            "wind_speed_10m": "Wind Speed (10m, km/h)",
+            "wind_direction_10m": "Wind Direction (10m, degrees)",
+            "soil_temperature_0cm": "Soil Temperature (C)",
+            "soil_moisture_0_to_1cm": "Soil Moisture (%)"
+        };
             // Statistical functions
             function mean(arr) {
                 return arr.reduce((a, b) => a + b) / arr.length;
