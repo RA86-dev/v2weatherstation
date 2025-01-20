@@ -42,7 +42,7 @@ async def interactive_map(requests: fastapi.requests.Request):
     return fastapi.responses.FileResponse('assets/interactive_pressure_map.html')
 @app.get('/license')
 async def license(requests: fastapi.requests.Request):
-    return fastapi.responses.FileResponse('assets/LICENSE.html')
+    return fastapi.responses.FileResponse('assets/LICENSE.txt')
 @app.get('/favicon.ico')
 async def favicon_item(requests: fastapi.requests.Request):
     return fastapi.responses.FileResponse('assets/favicon.ico')
