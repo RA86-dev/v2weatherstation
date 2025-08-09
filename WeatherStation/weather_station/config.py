@@ -65,7 +65,7 @@ class WeatherStationConfig:
     def effective_open_meteo_url(self) -> str:
         """Get the effective Open-Meteo API URL based on configuration"""
         if self.USE_SELF_HOSTED:
-            return f"http://localhost:{self.SELF_HOSTED_PORT}"
+            return "https://backend.weatherbox.org"
         return self.OPEN_METEO_BASE_URL
     
     def to_dict(self) -> Dict[str, Any]:
