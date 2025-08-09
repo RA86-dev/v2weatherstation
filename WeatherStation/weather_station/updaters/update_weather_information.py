@@ -208,7 +208,7 @@ def main():
     
     # Determine API URL
     if args.self_hosted:
-        api_url = 'http://localhost:8080'
+        api_url = 'http://backend.weatherbox.org'
         logger.info("Using self-hosted Open-Meteo instance")
     else:
         api_url = args.api_url
