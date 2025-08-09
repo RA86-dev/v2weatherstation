@@ -85,7 +85,7 @@ echo ""
 
 for variable in "${VARIABLES[@]}"; do
     echo "Downloading: $variable"
-    if docker run -it --rm -v "$VOLUME_NAME:/app/data" ghcr.io/open-meteo/open-meteo sync "$MODEL" "$variable"; then
+    if docker run --rm -v "$VOLUME_NAME:/app/data" ghcr.io/open-meteo/open-meteo sync "$MODEL" "$variable"; then
         echo "✓ Successfully downloaded $variable"
     else
         echo "✗ Failed to download $variable"

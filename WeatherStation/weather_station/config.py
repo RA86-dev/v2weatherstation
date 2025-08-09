@@ -22,7 +22,7 @@ class WeatherStationConfig:
             'OPEN_METEO_API_URL', 
             'https://api.open-meteo.com'
         )
-        self.USE_SELF_HOSTED = os.getenv('USE_SELF_HOSTED', 'false').lower() == 'true'
+        self.USE_SELF_HOSTED = True  # Always use self-hosted Open-Meteo instance
         self.SELF_HOSTED_PORT = int(os.getenv('SELF_HOSTED_PORT', '8080'))
         
         # Data configuration

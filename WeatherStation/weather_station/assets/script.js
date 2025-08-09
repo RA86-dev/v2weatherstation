@@ -56,8 +56,8 @@ class WeatherStation {
         statusIndicator.id = 'data-status-indicator';
         statusIndicator.className = 'data-status-indicator';
         statusIndicator.innerHTML = `
-            <span id="status-icon" class="status-icon">🔄</span>
-            <span id="status-text" class="status-text">Checking data...</span>
+            <span id="status-icon" class="status-icon">🌐</span>
+            <span id="status-text" class="status-text">Live Data</span>
         `;
         
         // Add to navbar
@@ -114,27 +114,28 @@ class WeatherStation {
         
         if (!this.dataStatus || !statusIcon || !statusText || !indicator) return;
 
-        const ageDays = this.dataStatus.data_info.age_days || Infinity;
-        const needsUpdate = this.dataStatus.needs_update;
+        const info = this.dataStatus.data_info;
+        const cache = this.dataStatus.cache_status;
+        const apiAccessible = info.api_accessible;
         
         // Reset classes
         indicator.className = 'data-status-indicator';
         
-        if (ageDays === Infinity || !this.dataStatus.data_info.exists) {
-            statusIcon.textContent = '❌';
-            statusText.textContent = 'No data';
-            indicator.classList.add('status-stale');
-        } else if (needsUpdate) {
-            statusIcon.textContent = '⚠️';
-            statusText.textContent = `Data ${ageDays.toFixed(1)}d old`;
-            indicator.classList.add('status-stale');
-        } else if (ageDays < 1) {
-            statusIcon.textContent = '✅';
-            statusText.textContent = 'Data fresh';
+        if (cache.has_cache && cache.cache_fresh) {
+            statusIcon.textContent = '⚡';
+            statusText.textContent = `Cached (${cache.cached_locations})`;
             indicator.classList.add('status-fresh');
+        } else if (apiAccessible && info.location_count > 0) {
+            statusIcon.textContent = '🌐';
+            statusText.textContent = `Live (${info.location_count})`;
+            indicator.classList.add('status-fresh');
+        } else if (!apiAccessible) {
+            statusIcon.textContent = '❌';
+            statusText.textContent = 'API Down';
+            indicator.classList.add('status-stale');
         } else {
-            statusIcon.textContent = '🟡';
-            statusText.textContent = `Data ${ageDays.toFixed(1)}d old`;
+            statusIcon.textContent = '🔄';
+            statusText.textContent = 'Loading...';
             indicator.classList.add('status-updating');
         }
         
@@ -187,9 +188,6 @@ class WeatherStation {
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-primary" onclick="weatherStation.forceDataUpdate()" data-bs-dismiss="modal">
-                            🔄 Update Now
-                        </button>
                     </div>
                 </div>
             </div>
@@ -209,72 +207,40 @@ class WeatherStation {
         if (!this.dataStatus) return '<p>Status information not available.</p>';
         
         const info = this.dataStatus.data_info;
-        const ageDays = info.age_days || Infinity;
-        const ageHours = (info.age_seconds || Infinity) / 3600;
+        const cache = this.dataStatus.cache_status;
         
         return `
             <div class="row g-3">
                 <div class="col-md-6">
-                    <strong>Data File Status:</strong><br>
-                    ${info.exists ? '✅ Present' : '❌ Missing'}<br>
-                    <small>${info.exists ? `${(info.size / 1024 / 1024).toFixed(1)} MB` : ''}</small>
+                    <strong>Data Mode:</strong><br>
+                    ⚡ Smart Caching<br>
+                    <small>15min cache + live fallback</small>
                 </div>
                 <div class="col-md-6">
-                    <strong>Data Age:</strong><br>
-                    ${ageDays === Infinity ? 'Unknown' : `${ageDays.toFixed(1)} days`}<br>
-                    <small>${ageHours === Infinity ? '' : `(${ageHours.toFixed(1)} hours)`}</small>
+                    <strong>API Status:</strong><br>
+                    ${info.api_accessible ? '✅ Online' : '❌ Offline'}<br>
+                    <small>${info.api_url}</small>
                 </div>
                 <div class="col-md-6">
-                    <strong>Auto-Update:</strong><br>
-                    ${this.dataStatus.auto_update_enabled ? '✅ Enabled' : '❌ Disabled'}<br>
-                    <small>Every ${this.dataStatus.update_interval_hours} hours</small>
+                    <strong>Cache Status:</strong><br>
+                    ${cache.has_cache ? (cache.cache_fresh ? '✅' : '⚠️') : '❌'} ${cache.cached_locations} locations<br>
+                    <small>${cache.has_cache ? `${cache.cache_age_minutes}min old` : 'No cache'}</small>
                 </div>
                 <div class="col-md-6">
-                    <strong>Locations:</strong><br>
-                    ${info.record_count || 0} cities<br>
-                    <small>Retention: ${this.dataStatus.retention_days} days</small>
+                    <strong>Total Locations:</strong><br>
+                    ${info.location_count || 0} cities<br>
+                    <small>Parallel fetching enabled</small>
                 </div>
             </div>
-            ${this.dataStatus.needs_update ? 
-                '<div class="alert alert-warning mt-3"><strong>⚠️ Update Recommended</strong><br>Data is older than recommended.</div>' : 
-                '<div class="alert alert-success mt-3"><strong>✅ Data is Current</strong><br>Within acceptable freshness limits.</div>'
+            ${!info.api_accessible ? 
+                '<div class="alert alert-danger mt-3"><strong>❌ API Offline</strong><br>Open-Meteo server is not accessible.</div>' : 
+                cache.cache_fresh ? 
+                    '<div class="alert alert-success mt-3"><strong>⚡ Fast Mode Active</strong><br>Using fresh cached data for optimal performance.</div>' :
+                    '<div class="alert alert-info mt-3"><strong>🌐 Live Mode Active</strong><br>Fetching fresh data in parallel batches.</div>'
             }
         `;
     }
 
-    async forceDataUpdate() {
-        const button = event?.target;
-        const originalText = button?.textContent;
-        
-        try {
-            if (button) {
-                button.disabled = true;
-                button.innerHTML = '🔄 Updating...';
-            }
-            
-            this.showUpdateProgressNotification();
-            
-            const response = await fetch('/api/data/update', { method: 'POST' });
-            const result = await response.json();
-            
-            if (result.success) {
-                this.showSuccessNotification('✅ Data updated successfully!');
-                // Refresh data status and cache
-                this.dataCache = null;
-                await this.checkDataStatus();
-                await this.loadWeatherData();
-            } else {
-                this.showErrorNotification('❌ Data update failed: ' + result.message);
-            }
-        } catch (error) {
-            this.showErrorNotification('❌ Update failed: ' + error.message);
-        } finally {
-            if (button) {
-                button.disabled = false;
-                button.innerHTML = originalText;
-            }
-        }
-    }
 
     showUpdateProgressNotification() {
         const notification = document.createElement('div');

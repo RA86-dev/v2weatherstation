@@ -146,28 +146,6 @@ class WeatherStationApp:
             """Get data manager status"""
             return JSONResponse(self.data_manager.get_status())
         
-        @self.app.post("/api/data/update")
-        async def force_data_update():
-            return JSONResponse({
-                     "success": True,
-                     "message": "Data update completed successfully" if True else "Data update failed",
-                     "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
-                 })
-            """Force immediate data update"""
-            # try:
-            #     success = self.data_manager.force_update()
-            #     return JSONResponse({
-            #         "success": success,
-            #         "message": "Data update completed successfully" if success else "Data update failed",
-            #         "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
-            #     })
-            # except Exception as e:
-            #     logger.error(f"Error in force update: {e}")
-            #     return JSONResponse({
-            #         "success": False,
-            #         "message": f"Update failed: {str(e)}",
-            #         "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
-            #     }, status_code=500)
         
         @self.app.get("/api/data/weather")
         async def get_weather_data():

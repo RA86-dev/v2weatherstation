@@ -179,6 +179,14 @@
           }
         }
 
+        // Utility function to safely format pressure values
+        function formatPressure(pressure) {
+            if (pressure == null || isNaN(pressure) || !isFinite(pressure)) {
+                return 'N/A';
+            }
+            return Number(pressure).toFixed(1);
+        }
+
         // Function to update map markers based on selected date and time
         function updateMap() {
   const selectedDate = document.getElementById('date-select').value;
@@ -193,8 +201,10 @@
       const dateIndex = hourlyData.time.findIndex(timeString => 
         timeString === selectedDateTime
       );
-      // Only include points where we found a matching time
-      return dateIndex !== -1;
+      // Only include points where we found a matching time and valid pressure data
+      if (dateIndex === -1) return false;
+      const pressure = hourlyData.pressure_msl[dateIndex];
+      return pressure != null && !isNaN(pressure) && isFinite(pressure);
     })
     .map(([cityName, cityData]) => {
       const dateIndex = cityData.hourly.time.findIndex(timeString => 
@@ -227,7 +237,7 @@
       opacity: 1,
       fillOpacity: 0.8
     }).addTo(map)
-      .bindPopup(`<b>${point.city}</b><br>Pressure: ${point.pressure} hPa`);
+      .bindPopup(`<b>${point.city}</b><br>Pressure: ${formatPressure(point.pressure)} hPa`);
   });
 }
 

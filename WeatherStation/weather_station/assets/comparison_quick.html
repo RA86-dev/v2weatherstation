@@ -130,6 +130,18 @@
         const locationSelect = document.getElementById('location');
         const plotDiv = document.getElementById('plotDiv');
 
+        // Utility function to filter out null/undefined values while keeping time alignment
+        function filterDataWithTime(timeArray, dataArray) {
+            const filtered = { time: [], data: [] };
+            for (let i = 0; i < timeArray.length; i++) {
+                if (dataArray[i] != null && !isNaN(dataArray[i]) && isFinite(dataArray[i])) {
+                    filtered.time.push(timeArray[i]);
+                    filtered.data.push(dataArray[i]);
+                }
+            }
+            return filtered;
+        }
+
         // Function to update the plot
         function updatePlot(data) {
             const selectedLocation = locationSelect.value;
@@ -137,17 +149,21 @@
             const param2 = param2Select.value;
 
             const locationData = data[selectedLocation].hourly;
+            
+            // Filter null values while maintaining time alignment
+            const param1Filtered = filterDataWithTime(locationData.time, locationData[param1]);
+            const param2Filtered = filterDataWithTime(locationData.time, locationData[param2]);
 
             const trace1 = {
-                x: locationData.time,
-                y: locationData[param1],
+                x: param1Filtered.time,
+                y: param1Filtered.data,
                 name: weatherParams[param1],
                 type: 'scatter'
             };
 
             const trace2 = {
-                x: locationData.time,
-                y: locationData[param2],
+                x: param2Filtered.time,
+                y: param2Filtered.data,
                 name: weatherParams[param2],
                 yaxis: 'y2',
                 type: 'scatter'

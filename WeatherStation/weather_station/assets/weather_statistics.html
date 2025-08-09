@@ -278,29 +278,42 @@
             return numerator / denominator;
         }
 
+        // Utility function to safely handle null/undefined values
+        function safeToFixed(value, decimals = 2) {
+            if (value == null || isNaN(value) || !isFinite(value)) {
+                return 'N/A';
+            }
+            return Number(value).toFixed(decimals);
+        }
+
+        // Filter out null/undefined values from arrays
+        function filterValidValues(arr) {
+            return arr.filter(val => val != null && !isNaN(val) && isFinite(val));
+        }
+
         // Update functions
         function updateStatistics(data) {
             const locationData = data[locationSelect.value].hourly;
-            const param1Data = locationData[param1Select.value];
-            const param2Data = locationData[param2Select.value];
+            const param1Data = filterValidValues(locationData[param1Select.value]);
+            const param2Data = filterValidValues(locationData[param2Select.value]);
 
             // Update titles
             document.getElementById('param1Title').textContent = `${weatherParams[param1Select.value]} Statistics`;
             document.getElementById('param2Title').textContent = `${weatherParams[param2Select.value]} Statistics`;
 
             // Parameter 1 statistics
-            document.getElementById('param1Mean').textContent = mean(param1Data).toFixed(2);
-            document.getElementById('param1Median').textContent = median(param1Data).toFixed(2);
-            document.getElementById('param1Mode').textContent = mode(param1Data).toFixed(2);
-            document.getElementById('param1Min').textContent = Math.min(...param1Data).toFixed(2);
-            document.getElementById('param1Max').textContent = Math.max(...param1Data).toFixed(2);
+            document.getElementById('param1Mean').textContent = safeToFixed(mean(param1Data));
+            document.getElementById('param1Median').textContent = safeToFixed(median(param1Data));
+            document.getElementById('param1Mode').textContent = safeToFixed(mode(param1Data));
+            document.getElementById('param1Min').textContent = safeToFixed(param1Data.length > 0 ? Math.min(...param1Data) : null);
+            document.getElementById('param1Max').textContent = safeToFixed(param1Data.length > 0 ? Math.max(...param1Data) : null);
 
             // Parameter 2 statistics
-            document.getElementById('param2Mean').textContent = mean(param2Data).toFixed(2);
-            document.getElementById('param2Median').textContent = median(param2Data).toFixed(2);
-            document.getElementById('param2Mode').textContent = mode(param2Data).toFixed(2);
-            document.getElementById('param2Min').textContent = Math.min(...param2Data).toFixed(2);
-            document.getElementById('param2Max').textContent = Math.max(...param2Data).toFixed(2);
+            document.getElementById('param2Mean').textContent = safeToFixed(mean(param2Data));
+            document.getElementById('param2Median').textContent = safeToFixed(median(param2Data));
+            document.getElementById('param2Mode').textContent = safeToFixed(mode(param2Data));
+            document.getElementById('param2Min').textContent = safeToFixed(param2Data.length > 0 ? Math.min(...param2Data) : null);
+            document.getElementById('param2Max').textContent = safeToFixed(param2Data.length > 0 ? Math.max(...param2Data) : null);
 
             // Update visualizations
             updateVisualizations(param1Data, param2Data);
@@ -366,7 +379,7 @@
 
         function updateCorrelationMetrics(corrCoeff, dataPoints) {
             // Update correlation coefficient
-            document.getElementById('correlationCoeff').textContent = corrCoeff.toFixed(4);
+            document.getElementById('correlationCoeff').textContent = safeToFixed(corrCoeff, 4);
             
             // Determine relationship strength
             let strength = '';
