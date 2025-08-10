@@ -41,7 +41,7 @@ class WeatherDataManager:
             logger.warning("Background update thread already running")
             return
             
-        logger.info(f"Starting automatic data updates every {self.config.DATA_UPDATE_INTERVAL} seconds")
+        logger.info(f"Starting automatic data file updates (every {self.config.DATA_UPDATE_INTERVAL} seconds)")
         self.should_stop.clear()
         self.update_thread = threading.Thread(target=self._update_loop, daemon=True)
         self.update_thread.start()
@@ -54,56 +54,60 @@ class WeatherDataManager:
             self.update_thread.join(timeout=10)
     
     def _update_loop(self):
-        """Background update loop"""
+        """Background update loop for periodic data file updates"""        
+        logger.info("Background update loop started")
+        
+        # Wait 30 seconds after startup before first check
+        self.should_stop.wait(30)
+        
         # Check immediately on startup if data needs updating
-        if self.should_update_data():
-            logger.info("Open-Meteo instance needs updating on startup")
-            self._perform_update()
+        if not self.should_stop.is_set() and self.should_update_data():
+            logger.info("Data file needs updating on startup")
+            success = self._perform_update()
+            if success:
+                logger.info("✅ Startup data update completed successfully")
+            else:
+                logger.warning("⚠️ Startup data update failed, will retry in next cycle")
         
         while not self.should_stop.is_set():
             try:
-                # Check for Open-Meteo instance updates (weekly)
-                if self.should_update_data():
-                    logger.info("Performing scheduled Open-Meteo instance update")
-                    self._perform_update()
+                # Check every 6 hours if data needs updating
+                check_interval = 21600  # 6 hours
+                self.should_stop.wait(check_interval)
                 
-                # Refresh data cache if it's getting stale (every 10 minutes)
-                current_time = time.time()
-                if (self._data_cache is not None and 
-                    current_time - self._cache_timestamp > 600):  # 10 minutes
-                    logger.info("Refreshing data cache in background")
-                    try:
-                        locations = self._load_locations()
-                        if locations:
-                            fresh_data = self._fetch_data_in_batches(locations)
-                            if fresh_data:
-                                self._data_cache = fresh_data
-                                self._cache_timestamp = current_time
-                                logger.info(f"✓ Background cache refresh completed ({len(fresh_data)} locations)")
-                    except Exception as e:
-                        logger.warning(f"Background cache refresh failed: {e}")
-                
-                # Sleep for 10 minutes between checks
-                self.should_stop.wait(600)  # Check every 10 minutes
+                if not self.should_stop.is_set() and self.should_update_data():
+                    logger.info("Performing scheduled background data update")
+                    success = self._perform_update()
+                    
+                    if success:
+                        logger.info("✅ Background data update completed successfully")
+                    else:
+                        logger.warning("⚠️ Background data update failed, will retry in next cycle")
                 
             except Exception as e:
-                logger.error(f"Error in update loop: {e}")
-                self.should_stop.wait(300)  # Wait 5 minutes on error
+                logger.error(f"Error in background update loop: {e}")
+                # Wait 10 minutes on error before retrying
+                self.should_stop.wait(600)
     
     def should_update_data(self) -> bool:
-        """Check if Open-Meteo instance needs updating"""
+        """Check if data file needs updating (every 7 days)"""
         try:
-            # Always return True for weekly updates (controlled by _update_loop timing)
-            # We only update the Open-Meteo instance, not local data files
-            current_time = time.time()
-            time_since_last_check = current_time - self._last_update_check
+            output_file = Path(self.config.OUTPUT_DATA_FILE)
             
-            # Update every week (604800 seconds)
-            needs_update = time_since_last_check >= self.config.DATA_UPDATE_INTERVAL
+            if not output_file.exists():
+                logger.info("Data file does not exist, update needed")
+                return True
+            
+            # Check file age
+            file_mtime = output_file.stat().st_mtime
+            current_time = time.time()
+            file_age_seconds = current_time - file_mtime
+            
+            # Update every 7 days (604800 seconds)
+            needs_update = file_age_seconds >= self.config.DATA_UPDATE_INTERVAL
             
             if needs_update:
-                logger.info(f"Open-Meteo instance update needed - {time_since_last_check/3600:.1f}h since last update")
-                self._last_update_check = current_time
+                logger.info(f"Data file update needed - {file_age_seconds/3600:.1f}h since last update")
             
             return needs_update
             
@@ -112,171 +116,216 @@ class WeatherDataManager:
             return True  # Update on error to be safe
     
     def get_data_info(self) -> Dict:
-        """Get information about live data system"""
+        """Get information about data file system"""
         try:
-            # Check if Open-Meteo instance is accessible
-            import requests
-            response = requests.get(f"{self.config.effective_open_meteo_url}/v1/forecast?latitude=0&longitude=0", timeout=5)
-            is_api_accessible = response.status_code == 200
+            output_file = Path(self.config.OUTPUT_DATA_FILE)
             
-            # Load location count
-            locations = self._load_locations()
-            location_count = len(locations)
+            # Check if data file exists
+            file_exists = output_file.exists()
+            file_size_mb = 0.0
+            data_age = "Unknown"
+            location_count = 0
+            
+            if file_exists:
+                # Get file size in MB
+                file_size_bytes = output_file.stat().st_size
+                file_size_mb = file_size_bytes / (1024 * 1024)
+                
+                # Calculate file age
+                file_mtime = output_file.stat().st_mtime
+                age_seconds = time.time() - file_mtime
+                if age_seconds < 60:
+                    data_age = f"{int(age_seconds)}s ago"
+                elif age_seconds < 3600:
+                    data_age = f"{int(age_seconds/60)}m ago"
+                elif age_seconds < 86400:
+                    data_age = f"{int(age_seconds/3600)}h ago"
+                else:
+                    data_age = f"{int(age_seconds/86400)}d ago"
+                
+                # Count locations in file
+                try:
+                    with open(output_file, 'r') as f:
+                        data = json.load(f)
+                        location_count = len(data)
+                except:
+                    location_count = 0
+            
+            # Check API accessibility for updates
+            is_api_accessible = True
+            try:
+                import requests
+                response = requests.get(f"{self.config.effective_open_meteo_url}/v1/forecast?latitude=0&longitude=0", timeout=5)
+                is_api_accessible = response.status_code == 200
+            except:
+                is_api_accessible = False
             
             return {
-                'exists': True,
-                'live_fetch': True,
+                'exists': file_exists,
+                'live_fetch': False,
                 'api_accessible': is_api_accessible,
                 'api_url': self.config.effective_open_meteo_url,
                 'location_count': location_count,
-                'last_update_check': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(self._last_update_check)),
-                'is_valid': is_api_accessible and location_count > 0,
-                'record_count': location_count
+                'last_update_check': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()) if file_exists else 'Never',
+                'is_valid': file_exists and location_count > 0,
+                'record_count': location_count,
+                'file_size_mb': file_size_mb,
+                'data_age': data_age,
+                'retention_days': self.config.DATA_RETENTION_DAYS,
+                'update_interval_hours': self.config.DATA_UPDATE_INTERVAL / 3600
             }
             
         except Exception as e:
             logger.error(f"Error getting data info: {e}")
             return {
                 'exists': False,
-                'live_fetch': True,
+                'live_fetch': False,
                 'api_accessible': False,
                 'api_url': self.config.effective_open_meteo_url,
                 'location_count': 0,
                 'last_update_check': 'Never',
                 'is_valid': False,
-                'record_count': 0
+                'record_count': 0,
+                'file_size_mb': 0.0,
+                'data_age': 'Unknown',
+                'retention_days': self.config.DATA_RETENTION_DAYS,
+                'update_interval_hours': self.config.DATA_UPDATE_INTERVAL / 3600
             }
     
     
     def _perform_update(self):
-        """Perform Open-Meteo instance update (item.sh only)"""
+        """Update the data file by fetching fresh data from API"""
         try:
-            logger.info("Starting Open-Meteo instance update...")
-            
-            # Run item.sh to update the self-hosted Open-Meteo instance
-            logger.info("Running item.sh to update Open-Meteo Docker container...")
-            item_script = Path(self.config.UPDATERS_DIR).parent / "item.sh"
-            if not item_script.exists():
-                logger.error(f"item.sh script not found: {item_script}")
-                return False
-            
-            # Run item.sh script
-            item_result = subprocess.run(
-                ["bash", str(item_script)],
-                cwd=str(item_script.parent),
-                capture_output=True,
-                text=True,
-                timeout=1800  # 30 minutes timeout
-            )
-            
-            if item_result.returncode != 0:
-                logger.error(f"item.sh failed with code {item_result.returncode}")
-                logger.error(f"STDOUT: {item_result.stdout}")
-                logger.error(f"STDERR: {item_result.stderr}")
-                return False
-            else:
-                logger.info("✓ Open-Meteo instance update completed successfully")
-                return True
-                
-        except subprocess.TimeoutExpired:
-            logger.error("Open-Meteo update timed out after 30 minutes")
-            return False
-        except Exception as e:
-            logger.error(f"Error updating Open-Meteo instance: {e}")
-            return False
-    
-    def force_update(self) -> bool:
-        """Force an immediate Open-Meteo instance update"""
-        logger.info("Forcing immediate Open-Meteo instance update")
-        return self._perform_update()
-    
-    def refresh_cache(self) -> bool:
-        """Force immediate cache refresh"""
-        try:
-            logger.info("Forcing immediate cache refresh")
-            locations = self._load_locations()
-            if not locations:
-                return False
-                
-            fresh_data = self._fetch_data_in_batches(locations)
-            if fresh_data:
-                self._data_cache = fresh_data
-                self._cache_timestamp = time.time()
-                logger.info(f"✓ Cache refresh completed ({len(fresh_data)} locations)")
-                return True
-            return False
-        except Exception as e:
-            logger.error(f"Cache refresh failed: {e}")
-            return False
-    
-    def load_weather_data(self) -> Optional[Dict]:
-        """Load weather data with smart caching for performance"""
-        try:
-            # Check if we have fresh cached data (cache for 15 minutes)
-            current_time = time.time()
-            if (self._data_cache is not None and 
-                current_time - self._cache_timestamp < 900):  # 15 minutes cache
-                logger.info(f"Returning cached data ({len(self._data_cache)} locations)")
-                return self._data_cache
-            
-            logger.info("Fetching fresh data from Open-Meteo instance")
+            logger.info("Starting data file update...")
             
             # Load locations
             locations = self._load_locations()
             if not locations:
                 logger.error("No locations to fetch data for")
-                return None
+                return False
             
-            # Fetch data in parallel batches for performance
-            live_data = self._fetch_data_in_batches(locations)
+            # Fetch fresh data with rate limiting
+            logger.info(f"Fetching data for {len(locations)} locations...")
+            fresh_data = self._fetch_data_with_rate_limiting(locations)
             
-            if live_data:
-                # Update cache
-                self._data_cache = live_data
-                self._cache_timestamp = current_time
-                logger.info(f"✓ Cached fresh data for {len(live_data)} locations")
-                return live_data
-            else:
+            if not fresh_data:
                 logger.error("Failed to fetch any data")
-                return None
+                return False
+            
+            # Save to output_data.json
+            output_file = Path(self.config.OUTPUT_DATA_FILE)
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(output_file, 'w') as f:
+                json.dump(fresh_data, f, indent=2)
+            
+            logger.info(f"✅ Data file updated successfully with {len(fresh_data)} locations ({output_file.stat().st_size / 1024 / 1024:.1f} MB)")
+            return True
             
         except Exception as e:
-            logger.error(f"Error loading weather data: {e}")
+            logger.error(f"Error updating data file: {e}")
+            return False
+    
+    def force_update(self) -> bool:
+        """Force an immediate data file update"""
+        logger.info("Forcing immediate data file update")
+        return self._perform_update()
+    
+    def refresh_cache(self) -> bool:
+        """Alias for force_update to maintain compatibility"""
+        return self.force_update()
+    
+    def load_weather_data(self) -> Optional[Dict]:
+        """Load weather data from output_data.json file"""
+        try:
+            output_file = Path(self.config.OUTPUT_DATA_FILE)
+            
+            if not output_file.exists():
+                logger.warning(f"Data file not found: {output_file}")
+                return None
+            
+            with open(output_file, 'r') as f:
+                data = json.load(f)
+            
+            logger.info(f"✓ Loaded weather data from file ({len(data)} locations)")
+            return data
+            
+        except Exception as e:
+            logger.error(f"Error loading weather data from file: {e}")
             return None
     
-    def _fetch_data_in_batches(self, locations: Dict) -> Dict:
-        """Fetch data in parallel batches for better performance"""
-        import concurrent.futures
-        import threading
-        
+    def _fetch_data_with_rate_limiting(self, locations: Dict) -> Dict:
+        """Fetch data with proper rate limiting and ensure minimum 100 valid locations"""
         live_data = {}
-        data_lock = threading.Lock()
+        total_locations = len(locations)
+        completed = 0
+        failed = 0
+        min_locations_target = 100
         
-        def fetch_location_data(city_coords_pair):
-            city, coordinates = city_coords_pair
+        logger.info(f"Starting data fetch for {total_locations} locations (target: min {min_locations_target} valid)")
+        
+        for city, coordinates in locations.items():
             try:
+                # Add delay to respect rate limits (1 request per second)
+                if completed > 0:
+                    time.sleep(1.1)  # Slightly over 1 second to be safe
+                
                 data = self._fetch_live_weather_data(city, coordinates)
-                if data:
-                    with data_lock:
-                        live_data[city] = data
-                    return True
-                return False
+                if data and self._has_valid_weather_data(data):
+                    live_data[city] = data
+                    completed += 1
+                    
+                    # Log progress every 20 locations
+                    if completed % 20 == 0:
+                        logger.info(f"Progress: {completed}/{total_locations} locations fetched ({completed/total_locations*100:.1f}%)")
+                    
+                    # Stop early if we have enough valid data (optional optimization)
+                    # if completed >= 150:  # Allow up to 150 for better coverage
+                    #     logger.info(f"Reached sufficient coverage with {completed} locations")
+                    #     break
+                        
+                else:
+                    failed += 1
+                    if data:
+                        logger.debug(f"No valid weather data for {city} (API returned nulls)")
+                    else:
+                        logger.warning(f"No data received for {city}")
+                    
             except Exception as e:
+                failed += 1
                 logger.warning(f"Failed to fetch data for {city}: {e}")
-                return False
+                continue
         
-        # Use ThreadPoolExecutor for concurrent requests
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(fetch_location_data, item) for item in locations.items()]
-            
-            # Wait for completion with progress tracking
-            completed = 0
-            for future in concurrent.futures.as_completed(futures):
-                completed += 1
-                if completed % 50 == 0:  # Log progress every 50 locations
-                    logger.info(f"Progress: {completed}/{len(locations)} locations fetched")
+        success_rate = (completed / total_locations) * 100
+        logger.info(f"Data fetch completed: {completed} valid locations, {failed} failed ({success_rate:.1f}% success rate)")
+        
+        if completed < min_locations_target:
+            logger.warning(f"⚠️ Only {completed} locations have valid data (target: {min_locations_target})")
+            logger.warning("This might be due to API issues or missing weather data")
+        else:
+            logger.info(f"✅ Successfully fetched {completed} locations with valid weather data")
         
         return live_data
+    
+    def _has_valid_weather_data(self, data: Dict) -> bool:
+        """Check if weather data contains valid (non-null) values"""
+        if not data or 'hourly' not in data:
+            return False
+        
+        hourly = data['hourly']
+        
+        # Check key weather parameters for any non-null values
+        key_params = ['temperature_2m', 'pressure_msl', 'relative_humidity_2m', 'wind_speed_10m']
+        
+        for param in key_params:
+            if param in hourly and isinstance(hourly[param], list):
+                # Check if at least 25% of values are non-null
+                values = hourly[param]
+                non_null_count = sum(1 for v in values if v is not None)
+                if non_null_count > len(values) * 0.25:  # At least 25% non-null
+                    return True
+        
+        return False
     
     def _load_locations(self) -> Dict:
         """Load locations from geolocations.json"""
@@ -296,38 +345,28 @@ class WeatherDataManager:
             
             latitude, longitude = coordinates
             
-            # Weather parameters to fetch (using parameters available in ecmwf_ifs025 model)
-            if self.config.USE_SELF_HOSTED:
-                weather_params = [
-                    'temperature_2m', 'relative_humidity_2m', 'apparent_temperature',
-                    'rain', 'showers', 'snowfall', 'pressure_msl', 
-                    'cloud_cover', 'wind_speed_180m', 'wind_direction_180m',
-                    'visibility', 'uv_index'
-                ]
-            else:
-                weather_params = [
-                    'temperature_2m', 'relative_humidity_2m', 'dew_point_2m', 
-                    'apparent_temperature', 'precipitation_probability', 'precipitation',
-                    'rain', 'showers', 'snowfall', 'snow_depth', 'pressure_msl',
-                    'surface_pressure', 'cloud_cover', 'vapour_pressure_deficit',
-                    'wind_speed_10m', 'wind_direction_10m', 'soil_temperature_0cm',
-                    'soil_moisture_0_to_1cm'
-                ]
+            # Weather parameters for official Open-Meteo API
+            weather_params = [
+                'temperature_2m', 'relative_humidity_2m', 'dew_point_2m', 
+                'apparent_temperature', 'precipitation_probability', 'precipitation',
+                'rain', 'showers', 'snowfall', 'snow_depth', 'pressure_msl',
+                'surface_pressure', 'cloud_cover', 'visibility', 'uv_index',
+                'wind_speed_10m', 'wind_direction_10m', 'wind_gusts_10m',
+                'soil_temperature_0cm', 'soil_moisture_0_to_1cm'
+            ]
             
-            # Build API URL for self-hosted instance
+            # Build API URL for official Open-Meteo API
             params = {
                 'latitude': latitude,
                 'longitude': longitude,
                 'hourly': ','.join(weather_params),
                 'past_days': self.config.PAST_DAYS,
+                'forecast_days': 7,  # Get 7 days of forecast
                 'timezone': 'auto'
             }
             
-            # Add model parameter for self-hosted instance
-            if self.config.USE_SELF_HOSTED:
-                params['models'] = 'ecmwf_ifs025'
-            
-            api_url = f"{self.config.effective_open_meteo_url}/v1/forecast"
+            # Use official Open-Meteo API for better data coverage during updates
+            api_url = "https://api.open-meteo.com/v1/forecast"
             
             response = requests.get(api_url, params=params, timeout=10)
             response.raise_for_status()
@@ -362,15 +401,8 @@ class WeatherDataManager:
         """Get current status of data manager"""
         data_info = self.get_data_info()
         
-        # Cache status
-        cache_age_minutes = 0
-        cached_locations = 0
-        if self._data_cache and self._cache_timestamp > 0:
-            cache_age_minutes = (time.time() - self._cache_timestamp) / 60
-            cached_locations = len(self._data_cache)
-        
         return {
-            'live_fetch_enabled': True,
+            'live_fetch_enabled': False,
             'auto_update_enabled': self.config.AUTO_UPDATE_ENABLED,
             'update_interval_hours': self.config.DATA_UPDATE_INTERVAL / 3600,
             'background_thread_running': self.update_thread and self.update_thread.is_alive(),
@@ -378,11 +410,12 @@ class WeatherDataManager:
             'needs_update': self.should_update_data(),
             'api_accessible': data_info.get('api_accessible', False),
             'location_count': data_info.get('location_count', 0),
-            'cache_status': {
-                'has_cache': self._data_cache is not None,
-                'cached_locations': cached_locations,
-                'cache_age_minutes': round(cache_age_minutes, 1),
-                'cache_fresh': cache_age_minutes < 15
+            'file_based': True,
+            'file_status': {
+                'exists': data_info.get('exists', False),
+                'size_mb': data_info.get('file_size_mb', 0),
+                'age': data_info.get('data_age', 'Unknown'),
+                'valid': data_info.get('is_valid', False)
             }
         }
 

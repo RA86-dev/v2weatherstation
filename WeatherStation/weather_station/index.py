@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from config import get_config
 from data_manager import get_data_manager, start_data_manager, stop_data_manager
+from live_data_manager import get_live_data_manager
 
 # Setup logging
 config = get_config()
@@ -31,6 +32,7 @@ class WeatherStationApp:
         self.config = get_config()
         self.logs = []
         self.data_manager = get_data_manager()
+        self.live_data_manager = get_live_data_manager()
         
         # Initialize FastAPI app with configuration
         self.app = FastAPI(
@@ -52,6 +54,9 @@ class WeatherStationApp:
         logger.info(f"{self.config.APP_NAME} v{self.config.APP_VERSION} initialized successfully")
         if self.config.DEBUG:
             logger.debug(f"Configuration: {self.config.to_dict()}")
+            logger.info(f"🔑 Admin API Key: {self.config.API_KEY}")
+        else:
+            logger.info(f"🔑 Admin API Key generated (32 chars): {self.config.API_KEY[:8]}...")
     
     def _setup_events(self):
         """Setup FastAPI lifecycle events"""
@@ -61,14 +66,24 @@ class WeatherStationApp:
             """Application startup"""
             logger.info("Starting Weather Station application")
             
-            # Start data manager for automatic updates
-            start_data_manager()
-            logger.info("Data manager started")
-            
-            # Check if initial data update is needed
-            if self.data_manager.should_update_data():
-                logger.info("Scheduling initial data update")
-                # Don't block startup, let background thread handle it
+            if self.config.LIVE_DATA_ENABLED:
+                logger.info("Live data mode enabled - using self-hosted Open-Meteo API")
+                # Check API accessibility
+                api_status = self.live_data_manager.get_api_status()
+                if api_status['accessible']:
+                    logger.info(f"✓ Self-hosted API accessible ({api_status['response_time_ms']}ms)")
+                else:
+                    logger.warning(f"⚠ Self-hosted API not accessible: {api_status.get('error', 'Unknown error')}")
+            else:
+                logger.info("File-based data mode enabled")
+                # Start data manager for automatic updates
+                start_data_manager()
+                logger.info("Data manager started")
+                
+                # Check if initial data update is needed
+                if self.data_manager.should_update_data():
+                    logger.info("Scheduling initial data update")
+                    # Don't block startup, let background thread handle it
         
         @self.app.on_event("shutdown")
         async def shutdown_event():
@@ -144,28 +159,252 @@ class WeatherStationApp:
         @self.app.get("/api/data/status")
         async def data_status():
             """Get data manager status"""
-            return JSONResponse(self.data_manager.get_status())
+            status = self.data_manager.get_status()
+            # Add additional debug information
+            status['debug_info'] = {
+                'cache_exists': self.data_manager._data_cache is not None,
+                'cache_size': len(self.data_manager._data_cache) if self.data_manager._data_cache else 0,
+                'cache_timestamp': self.data_manager._cache_timestamp,
+                'last_update_check': self.data_manager._last_update_check
+            }
+            return JSONResponse(status)
+        
+        @self.app.post("/api/data/force-update")
+        async def force_data_update(request: Request):
+            """Manually trigger a data update (requires API key)"""
+            try:
+                # Check API key
+                api_key = request.headers.get('X-API-Key') or request.headers.get('Authorization', '').replace('Bearer ', '')
+                
+                if not api_key or api_key != self.config.API_KEY:
+                    return JSONResponse({
+                        "success": False,
+                        "error": "Unauthorized",
+                        "message": "Valid API key required for manual updates",
+                        "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                    }, status_code=401)
+                
+                logger.info("Manual data update requested with valid API key")
+                success = self.data_manager.force_update()
+                
+                if success:
+                    return JSONResponse({
+                        "success": True,
+                        "message": "Data update completed successfully",
+                        "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                    })
+                else:
+                    return JSONResponse({
+                        "success": False,
+                        "message": "Data update failed - check logs for details",
+                        "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                    }, status_code=500)
+                    
+            except Exception as e:
+                logger.error(f"Error in manual update: {e}")
+                return JSONResponse({
+                    "success": False,
+                    "message": f"Update failed: {str(e)}",
+                    "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                }, status_code=500)
         
         
         @self.app.get("/api/data/weather")
-        async def get_weather_data():
-            """Get current weather data"""
+        async def get_weather_data(limit: int = 50):
+            """Get live weather data for multiple locations"""
+            start_time = time.time()
+            
+            # Validate and sanitize limit
+            limit = max(1, min(limit, 100))  # Between 1 and 100
+            
             try:
-                data = self.data_manager.load_weather_data()
+                if self.config.LIVE_DATA_ENABLED:
+                    # Get live data for limited number of cities
+                    locations = self.live_data_manager.load_locations()
+                    if not locations:
+                        return JSONResponse({
+                            "error": "No locations available",
+                            "message": "Location data could not be loaded. Check geolocations.json file.",
+                            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                            "request_id": f"req_{int(start_time)}"
+                        }, status_code=404)
+                    
+                    # Limit to prevent timeout issues
+                    limited_locations = dict(list(locations.items())[:limit])
+                    
+                    logger.info(f"Fetching live data for {len(limited_locations)} cities (limit: {limit})")
+                    data = self.live_data_manager._fetch_multiple_cities_data(limited_locations, limit)
+                    
+                    if not data:
+                        api_status = self.live_data_manager.get_api_status()
+                        error_msg = "Failed to fetch live weather data"
+                        if not api_status.get('accessible', False):
+                            error_msg += f" - API not accessible: {api_status.get('error', 'Unknown error')}"
+                        
+                        return JSONResponse({
+                            "error": "Weather data not available",
+                            "message": error_msg,
+                            "api_status": api_status,
+                            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                            "request_id": f"req_{int(start_time)}"
+                        }, status_code=503)
+                    
+                    fetch_time = time.time() - start_time
+                    logger.info(f"Successfully fetched {len(data)}/{len(limited_locations)} cities in {fetch_time:.2f}s")
+                    
+                    return JSONResponse({
+                        "data": data,
+                        "locations": list(data.keys()),
+                        "total_available": len(locations),
+                        "requested": len(limited_locations),
+                        "fetched": len(data),
+                        "live_data": True,
+                        "fetch_time_seconds": round(fetch_time, 2),
+                        "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                        "request_id": f"req_{int(start_time)}"
+                    })
+                else:
+                    # Fallback to file-based data
+                    data = self.data_manager.load_weather_data()
+                    if data is None:
+                        file_status = self.data_manager.get_data_info()
+                        return JSONResponse({
+                            "error": "Weather data not available",
+                            "message": "Data file may be outdated, missing, or failed to load",
+                            "file_status": file_status,
+                            "suggestion": "Try updating data file or enabling live data mode",
+                            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                            "request_id": f"req_{int(start_time)}"
+                        }, status_code=404)
+                    
+                    # Limit file data as well
+                    if limit < len(data):
+                        data = dict(list(data.items())[:limit])
+                    
+                    return JSONResponse({
+                        "data": data,
+                        "locations": list(data.keys()),
+                        "total": len(data),
+                        "live_data": False,
+                        "source": "file_cache",
+                        "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                        "request_id": f"req_{int(start_time)}"
+                    })
+                    
+            except Exception as e:
+                fetch_time = time.time() - start_time
+                logger.error(f"Error getting weather data after {fetch_time:.2f}s: {e}")
+                return JSONResponse({
+                    "error": "Internal server error",
+                    "message": f"Failed to process weather data request: {str(e)[:100]}",
+                    "fetch_time_seconds": round(fetch_time, 2),
+                    "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                    "request_id": f"req_{int(start_time)}"
+                }, status_code=500)
+        
+        @self.app.get("/api/data/live/{city}")
+        async def get_live_city_weather(city: str):
+            """Get live weather data for a specific city"""
+            try:
+                if not self.config.LIVE_DATA_ENABLED:
+                    return JSONResponse({
+                        "error": "Live data not enabled",
+                        "message": "Live data fetching is disabled in configuration",
+                        "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                    }, status_code=503)
+                
+                data = self.live_data_manager.get_weather_data(city)
                 if data is None:
                     return JSONResponse({
-                        "error": "Weather data not available",
-                        "message": "Data may be outdated or failed to load",
+                        "error": "City not found or data unavailable",
+                        "message": f"Could not fetch weather data for {city}",
                         "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
                     }, status_code=404)
                 
                 return JSONResponse({
+                    "city": city,
                     "data": data,
-                    "locations": list(data.keys()),
+                    "live_data": True,
+                    "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                })
+                
+            except Exception as e:
+                logger.error(f"Error getting live weather data for {city}: {e}")
+                return JSONResponse({
+                    "error": "Internal server error",
+                    "message": str(e),
+                    "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                }, status_code=500)
+        
+        @self.app.get("/api/data/current/{city}")
+        async def get_current_conditions(city: str):
+            """Get current weather conditions for a specific city"""
+            try:
+                if not self.config.LIVE_DATA_ENABLED:
+                    return JSONResponse({
+                        "error": "Live data not enabled",
+                        "message": "Live data fetching is disabled in configuration",
+                        "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                    }, status_code=503)
+                
+                data = self.live_data_manager.get_current_conditions(city)
+                if data is None:
+                    return JSONResponse({
+                        "error": "City not found or data unavailable",
+                        "message": f"Could not fetch current conditions for {city}",
+                        "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                    }, status_code=404)
+                
+                return JSONResponse({
+                    "city": city,
+                    "current_conditions": data,
+                    "live_data": True,
+                    "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                })
+                
+            except Exception as e:
+                logger.error(f"Error getting current conditions for {city}: {e}")
+                return JSONResponse({
+                    "error": "Internal server error",
+                    "message": str(e),
+                    "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                }, status_code=500)
+        
+        @self.app.get("/api/data/locations")
+        async def get_available_locations():
+            """Get list of available locations"""
+            try:
+                locations = self.live_data_manager.load_locations()
+                return JSONResponse({
+                    "locations": list(locations.keys()),
+                    "coordinates": locations,
+                    "total": len(locations),
                     "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
                 })
             except Exception as e:
-                logger.error(f"Error getting weather data: {e}")
+                logger.error(f"Error getting locations: {e}")
+                return JSONResponse({
+                    "error": "Internal server error",
+                    "message": str(e),
+                    "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                }, status_code=500)
+        
+        @self.app.get("/api/status")
+        async def get_api_status():
+            """Get API and self-hosted Open-Meteo status"""
+            try:
+                api_status = self.live_data_manager.get_api_status()
+                data_status = self.data_manager.get_status()
+                
+                return JSONResponse({
+                    "api_status": api_status,
+                    "data_manager_status": data_status,
+                    "live_data_enabled": self.config.LIVE_DATA_ENABLED,
+                    "self_hosted": self.config.USE_SELF_HOSTED,
+                    "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                })
+            except Exception as e:
+                logger.error(f"Error getting API status: {e}")
                 return JSONResponse({
                     "error": "Internal server error",
                     "message": str(e),
@@ -182,6 +421,18 @@ class WeatherStationApp:
                 "self_hosted": self.config.USE_SELF_HOSTED
             }
             return JSONResponse(public_config)
+        
+        @self.app.get("/admin/api-key")
+        async def get_api_key():
+            """Get the API key for administrative operations (local access only)"""
+            if not self.config.DEBUG:
+                raise HTTPException(status_code=404, detail="Not found")
+            
+            return JSONResponse({
+                "api_key": self.config.API_KEY,
+                "usage": "Use with X-API-Key header or Authorization: Bearer <key>",
+                "example": f"curl -X POST http://localhost:8110/api/data/force-update -H 'X-API-Key: {self.config.API_KEY}'"
+            })
         
         @self.app.get("/logs")
         async def get_logs(limit: int = 100):

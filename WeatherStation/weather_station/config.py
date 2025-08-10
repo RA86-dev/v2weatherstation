@@ -20,10 +20,11 @@ class WeatherStationConfig:
         # API configuration
         self.OPEN_METEO_BASE_URL = os.getenv(
             'OPEN_METEO_API_URL', 
-            'https://api.open-meteo.com'
+            'http://localhost:8080'  # Default to self-hosted
         )
-        self.USE_SELF_HOSTED = True  # Always use self-hosted Open-Meteo instance
+        self.USE_SELF_HOSTED = os.getenv('USE_SELF_HOSTED', 'true').lower() == 'true'
         self.SELF_HOSTED_PORT = int(os.getenv('SELF_HOSTED_PORT', '8080'))
+        self.LIVE_DATA_ENABLED = os.getenv('LIVE_DATA_ENABLED', 'true').lower() == 'true'
         
         # Data configuration
         self.DATA_UPDATE_INTERVAL = int(os.getenv('DATA_UPDATE_INTERVAL', '604800'))  # 7 days in seconds
@@ -50,6 +51,9 @@ class WeatherStationConfig:
         self.ALLOWED_HOSTS = self._parse_list(os.getenv('ALLOWED_HOSTS', '*'))
         self.CORS_ORIGINS = self._parse_list(os.getenv('CORS_ORIGINS', '*'))
         
+        # Security settings
+        self.API_KEY = os.getenv('API_KEY', self._generate_api_key())
+        
         # Application metadata
         self.APP_NAME = "Weather Station"
         self.APP_VERSION = "2.0.0"
@@ -61,11 +65,16 @@ class WeatherStationConfig:
             return ['*']
         return [item.strip() for item in value.split(',') if item.strip()]
     
+    def _generate_api_key(self) -> str:
+        """Generate a random API key for administrative endpoints"""
+        import secrets
+        import string
+        alphabet = string.ascii_letters + string.digits
+        return ''.join(secrets.choice(alphabet) for i in range(32))
+    
     @property
     def effective_open_meteo_url(self) -> str:
         """Get the effective Open-Meteo API URL based on configuration"""
-        if self.USE_SELF_HOSTED:
-            return "https://backend.weatherbox.org"
         return self.OPEN_METEO_BASE_URL
     
     def to_dict(self) -> Dict[str, Any]:
@@ -79,7 +88,8 @@ class WeatherStationConfig:
             'api': {
                 'open_meteo_url': self.effective_open_meteo_url,
                 'use_self_hosted': self.USE_SELF_HOSTED,
-                'self_hosted_port': self.SELF_HOSTED_PORT
+                'self_hosted_port': self.SELF_HOSTED_PORT,
+                'live_data_enabled': self.LIVE_DATA_ENABLED
             },
             'data': {
                 'update_interval': self.DATA_UPDATE_INTERVAL,

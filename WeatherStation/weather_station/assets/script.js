@@ -207,36 +207,36 @@ class WeatherStation {
         if (!this.dataStatus) return '<p>Status information not available.</p>';
         
         const info = this.dataStatus.data_info;
-        const cache = this.dataStatus.cache_status;
+        const fileStatus = this.dataStatus.file_status;
         
         return `
             <div class="row g-3">
                 <div class="col-md-6">
-                    <strong>Data Mode:</strong><br>
-                    ⚡ Smart Caching<br>
-                    <small>15min cache + live fallback</small>
+                    <strong>Data File Status:</strong><br>
+                    ${fileStatus?.exists ? '✅' : '❌'} ${fileStatus?.exists ? 'Present' : 'Missing'}<br>
+                    <small>${(fileStatus?.size_mb || 0).toFixed(1)} MB</small>
                 </div>
                 <div class="col-md-6">
-                    <strong>API Status:</strong><br>
-                    ${info.api_accessible ? '✅ Online' : '❌ Offline'}<br>
-                    <small>${info.api_url}</small>
+                    <strong>Data Age:</strong><br>
+                    ${fileStatus?.age || 'Unknown'}<br>
+                    <small>${this.dataStatus.file_based ? 'File-based storage' : 'Live system'}</small>
                 </div>
                 <div class="col-md-6">
-                    <strong>Cache Status:</strong><br>
-                    ${cache.has_cache ? (cache.cache_fresh ? '✅' : '⚠️') : '❌'} ${cache.cached_locations} locations<br>
-                    <small>${cache.has_cache ? `${cache.cache_age_minutes}min old` : 'No cache'}</small>
+                    <strong>Auto-Update:</strong><br>
+                    ${this.dataStatus.auto_update_enabled ? '✅' : '❌'} ${this.dataStatus.auto_update_enabled ? 'Enabled' : 'Disabled'}<br>
+                    <small>Every ${Math.round(this.dataStatus.update_interval_hours || 168)} hours</small>
                 </div>
                 <div class="col-md-6">
-                    <strong>Total Locations:</strong><br>
+                    <strong>Locations:</strong><br>
                     ${info.location_count || 0} cities<br>
-                    <small>Parallel fetching enabled</small>
+                    <small>Retention: ${info.retention_days || 16} days</small>
                 </div>
             </div>
-            ${!info.api_accessible ? 
-                '<div class="alert alert-danger mt-3"><strong>❌ API Offline</strong><br>Open-Meteo server is not accessible.</div>' : 
-                cache.cache_fresh ? 
-                    '<div class="alert alert-success mt-3"><strong>⚡ Fast Mode Active</strong><br>Using fresh cached data for optimal performance.</div>' :
-                    '<div class="alert alert-info mt-3"><strong>🌐 Live Mode Active</strong><br>Fetching fresh data in parallel batches.</div>'
+            ${fileStatus?.valid ? 
+                '<div class="alert alert-success mt-3"><strong>✅ Data is Current</strong><br>Within acceptable freshness limits.</div>' :
+                !fileStatus?.exists ?
+                    '<div class="alert alert-danger mt-3"><strong>❌ No Data File</strong><br>Data file needs to be created. This may take several minutes.</div>' : 
+                    '<div class="alert alert-warning mt-3"><strong>⚠️ Data File Issues</strong><br>Data file exists but may be invalid or empty.</div>'
             }
         `;
     }
@@ -297,15 +297,26 @@ class WeatherStation {
         }
     }
 
-    async loadWeatherData() {
-        // Use cache if recent (5 minutes)
+    async loadWeatherData(forceRefresh = false) {
+        // Use cache if recent (3 minutes) and not forcing refresh
         const now = Date.now();
-        if (this.dataCache && (now - this.dataCacheTime) < 300000) {
+        if (!forceRefresh && this.dataCache && (now - this.dataCacheTime) < 180000) {
             return this.dataCache;
         }
         
         try {
-            const response = await fetch('/api/data/weather');
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+            
+            const response = await fetch('/api/data/weather', {
+                signal: controller.signal,
+                headers: {
+                    'Cache-Control': forceRefresh ? 'no-cache' : 'max-age=180'
+                }
+            });
+            
+            clearTimeout(timeoutId);
+            
             if (response.ok) {
                 const result = await response.json();
                 this.dataCache = result.data;
@@ -313,19 +324,34 @@ class WeatherStation {
                 
                 // Trigger custom event for data load
                 window.dispatchEvent(new CustomEvent('weatherDataLoaded', { 
-                    detail: { data: this.dataCache, locations: result.locations } 
+                    detail: { 
+                        data: this.dataCache, 
+                        locations: result.locations,
+                        isLive: result.live_data || false,
+                        timestamp: result.timestamp
+                    } 
                 }));
                 
                 return this.dataCache;
             } else if (response.status === 404) {
                 const error = await response.json();
-                this.showErrorNotification(`⚠️ ${error.message}`);
+                this.showErrorNotification(`⚠️ ${error.message || 'Weather data not available'}`);
+                return null;
+            } else if (response.status === 503) {
+                const error = await response.json();
+                this.showErrorNotification(`🔧 ${error.message || 'Service temporarily unavailable'}`);
                 return null;
             } else {
-                throw new Error(`HTTP ${response.status}`);
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
         } catch (error) {
-            this.showErrorNotification(`❌ Failed to load weather data: ${error.message}`);
+            if (error.name === 'AbortError') {
+                this.showErrorNotification('⏰ Request timed out - please try again');
+            } else if (error.message.includes('fetch')) {
+                this.showErrorNotification('🌐 Network error - check your connection');
+            } else {
+                this.showErrorNotification(`❌ Failed to load weather data: ${error.message}`);
+            }
             return null;
         }
     }
