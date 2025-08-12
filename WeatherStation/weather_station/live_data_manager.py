@@ -63,7 +63,7 @@ class LiveWeatherDataManager:
         # Get data for all cities (this could be expensive, so limit concurrent requests)
         return self._fetch_multiple_cities_data(locations)
     
-    def _fetch_multiple_cities_data(self, locations: Dict, limit: int = 50) -> Dict:
+    def _fetch_multiple_cities_data(self, locations: Dict, limit: int = 300) -> Dict:
         """Fetch data for multiple cities with rate limiting and improved error handling"""
         result = {}
         count = 0
@@ -91,9 +91,9 @@ class LiveWeatherDataManager:
                 # Continue with other cities
                 continue
             
-            # Rate limiting - 1 request per second, with some jitter
+            # Rate limiting - reduced for self-hosted API
             if count < len(locations) - 1 and count % 10 != 9:  # No delay every 10th request
-                time.sleep(1.1)
+                time.sleep(0.001)  # Much faster for self-hosted API
             
             # Progress logging every 10 cities
             if count > 0 and count % 10 == 0:
@@ -141,6 +141,8 @@ class LiveWeatherDataManager:
             # Add metadata
             data['city'] = city
             data['coordinates'] = coordinates
+            data['latitude'] = latitude
+            data['longitude'] = longitude
             data['fetch_time'] = datetime.now().isoformat()
             
             return data

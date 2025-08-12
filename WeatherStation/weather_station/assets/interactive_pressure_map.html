@@ -56,48 +56,43 @@
 
             <div class="card mb-4">
                 <div class="card-header">
-                    <h3 class="mb-0">🕰️ Time Controls</h3>
+                    <h3 class="mb-0">🕰️ Time Controls & Data Options</h3>
                 </div>
                 <div class="card-body">
                     <div class="row g-3">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label for="date-select" class="form-label">📅 Select Date</label>
                             <input type="date" id="date-select" class="form-control">
                         </div>
-                        <div class="col-md-6">
-                            <label for="time-select" class="form-label">🕓 Select Time</label>
-                            <select id="time-select" class="form-select">
-          
-          <option value="01:00">1 AM</option>
-          <option value="02:00">2 AM</option>
-          <option value="03:00">3 AM</option>
-          <option value="04:00">4 AM</option>
-          <option value="05:00">5 AM</option>
-          <option value="06:00">6 AM</option>
-          <option value="07:00">7 AM</option>
-          <option value="08:00">8 AM</option>
-          <option value="09:00">9 AM</option>
-          <option value="10:00">10 AM</option>
-          <option value="11:00">11 AM</option>
-          <option value="12:00">12 PM</option>
-          <option value="13:00">1 PM</option>
-          <option value="14:00">2 PM</option>
-          <option value="15:00">3 PM</option>
-          <option value="16:00">4 PM</option>
-          <option value="17:00">5 PM</option>
-          <option value="18:00">6 PM</option>
-          <option value="19:00">7 PM</option>
-          <option value="20:00">8 PM</option>
-          <option value="21:00">9 PM</option>
-          <option value="22:00">10 PM</option>
-          <option value="23:00">11 PM</option>
-          <option value="00:00">12 AM</option>
+                        <div class="col-md-4">
+                            <label for="time-slider" class="form-label">🕓 Time: <span id="time-display">12:00</span></label>
+                            <input type="range" id="time-slider" class="form-range" min="0" max="23" value="12" step="1">
+                            <div class="d-flex justify-content-between">
+                                <small>00:00</small>
+                                <small>12:00</small>
+                                <small>23:00</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="data-type" class="form-label">📊 Data Display</label>
+                            <select id="data-type" class="form-select">
+                                <option value="pressure">🌪️ Pressure</option>
                             </select>
                         </div>
                     </div>
                     <div class="row mt-3">
-                        <div class="col-12">
+                        <div class="col-md-6">
                             <div class="d-flex align-items-center">
+                                <button class="btn btn-outline-primary btn-sm me-2" id="play-pause-btn">
+                                    ▶️ Play Animation
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" id="reset-btn">
+                                    🔄 Reset
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div id="legend-display" class="d-flex align-items-center">
                                 <span class="badge bg-danger me-2">●</span>
                                 <small class="me-3">Low Pressure (≤1013.25 hPa)</small>
                                 <span class="badge bg-primary me-2">●</span>
@@ -168,82 +163,291 @@
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
 
-        // Function to determine marker color based on pressure
-        function getColor(pressure) {
-          if (pressure > 1013.25) {
-            return 'blue';
-          } else if (pressure <= 1013.25) {
-            return 'red';
-          } else {
-            return 'green';
+        // Check available data fields and update dropdown
+        function checkAvailableDataFields() {
+            if (!data || Object.keys(data).length === 0) return;
+            
+            // Get first city's data to check available fields
+            const firstCity = Object.values(data)[0];
+            if (!firstCity || !firstCity.hourly) return;
+            
+            const hourlyData = firstCity.hourly;
+            const dataTypeSelect = document.getElementById('data-type');
+            
+            // Check if humidity data is available
+            const hasHumidity = hourlyData.relativehumidity_2m || 
+                               hourlyData.relative_humidity_2m || 
+                               hourlyData.humidity;
+            
+            if (!hasHumidity) {
+                // Remove humidity option if not available
+                const humidityOption = dataTypeSelect.querySelector('option[value="humidity"]');
+                if (humidityOption) {
+                    humidityOption.remove();
+                    console.warn('Humidity data not available, removing from options');
+                }
+            }
+            
+            // Check if temperature data is available
+            if (!hourlyData.temperature_2m) {
+                const tempOption = dataTypeSelect.querySelector('option[value="temperature"]');
+                if (tempOption) {
+                    tempOption.remove();
+                    console.warn('Temperature data not available, removing from options');
+                }
+            }
+        }
+
+        // Function to determine marker color based on data type and value
+        function getColor(value, dataType) {
+          switch(dataType) {
+            case 'pressure':
+              if (value > 1013.25) return 'blue';
+              else if (value <= 1013.25) return 'red';
+              else return 'green';
+            case 'temperature':
+              if (value > 20) return 'red';      // Warm (>20°C)
+              else if (value > 10) return 'orange'; // Mild (10-20°C)
+              else if (value > 0) return 'yellow';  // Cool (0-10°C)
+              else return 'blue';                   // Cold (≤0°C)
+            case 'humidity':
+              if (value > 70) return 'darkblue';    // High humidity (>70%)
+              else if (value > 50) return 'blue';   // Medium humidity (50-70%)
+              else if (value > 30) return 'green';  // Low humidity (30-50%)
+              else return 'orange';                 // Very low humidity (≤30%)
+            default:
+              return 'gray';
           }
         }
 
-        // Utility function to safely format pressure values
-        function formatPressure(pressure) {
-            if (pressure == null || isNaN(pressure) || !isFinite(pressure)) {
+        // Utility function to safely format values based on data type
+        function formatValue(value, dataType) {
+            if (value == null || isNaN(value) || !isFinite(value)) {
                 return 'N/A';
             }
-            return Number(pressure).toFixed(1);
+            switch(dataType) {
+                case 'pressure':
+                    return Number(value).toFixed(1) + ' hPa';
+                case 'temperature':
+                    return Number(value).toFixed(1) + '°C';
+                case 'humidity':
+                    return Number(value).toFixed(0) + '%';
+                default:
+                    return Number(value).toFixed(1);
+            }
+        }
+        
+        // Get the appropriate data field based on data type
+        function getDataField(cityData, dataType, dateIndex) {
+            const hourlyData = cityData.hourly;
+            if (!hourlyData || dateIndex < 0) return null;
+            
+            switch(dataType) {
+                case 'pressure':
+                    return hourlyData.pressure_msl ? hourlyData.pressure_msl[dateIndex] : null;
+                case 'temperature':
+                    return hourlyData.temperature_2m ? hourlyData.temperature_2m[dateIndex] : null;
+                case 'humidity':
+                    // Check multiple possible field names for humidity
+                    if (hourlyData.relativehumidity_2m) {
+                        return hourlyData.relativehumidity_2m[dateIndex];
+                    } else if (hourlyData.relative_humidity_2m) {
+                        return hourlyData.relative_humidity_2m[dateIndex];
+                    } else if (hourlyData.humidity) {
+                        return hourlyData.humidity[dateIndex];
+                    } else {
+                        // If no humidity data available, return null
+                        console.warn('Humidity data not available in weather data');
+                        return null;
+                    }
+                default:
+                    return null;
+            }
+        }
+        
+        // Update legend based on data type
+        function updateLegend(dataType) {
+            const legendDisplay = document.getElementById('legend-display');
+            let legendHTML = '';
+            
+            switch(dataType) {
+                case 'pressure':
+                    legendHTML = `
+                        <span class="badge bg-danger me-2">●</span>
+                        <small class="me-3">Low Pressure (≤1013.25 hPa)</small>
+                        <span class="badge bg-primary me-2">●</span>
+                        <small>High Pressure (>1013.25 hPa)</small>
+                    `;
+                    break;
+                case 'temperature':
+                    legendHTML = `
+                        <span class="badge bg-danger me-2">●</span>
+                        <small class="me-2">Hot (>20°C)</small>
+                        <span style="background-color: orange; color: white;" class="badge me-2">●</span>
+                        <small class="me-2">Mild (10-20°C)</small>
+                        <span style="background-color: #ffd700; color: black;" class="badge me-2">●</span>
+                        <small class="me-2">Cool (0-10°C)</small>
+                        <span class="badge bg-primary me-2">●</span>
+                        <small>Cold (≤0°C)</small>
+                    `;
+                    break;
+                case 'humidity':
+                    legendHTML = `
+                        <span style="background-color: darkblue;" class="badge me-2">●</span>
+                        <small class="me-2">High (>70%)</small>
+                        <span class="badge bg-primary me-2">●</span>
+                        <small class="me-2">Medium (50-70%)</small>
+                        <span class="badge bg-success me-2">●</span>
+                        <small class="me-2">Low (30-50%)</small>
+                        <span style="background-color: orange;" class="badge me-2">●</span>
+                        <small>Very Low (≤30%)</small>
+                    `;
+                    break;
+            }
+            
+            legendDisplay.innerHTML = legendHTML;
         }
 
+        // Animation control variables
+        let animationInterval = null;
+        let isAnimating = false;
+        
         // Function to update map markers based on selected date and time
         function updateMap() {
-  const selectedDate = document.getElementById('date-select').value;
-  const selectedTime = document.getElementById('time-select').value;
-  const selectedDateTime = `${selectedDate}T${selectedTime}`;
+            const selectedDate = document.getElementById('date-select').value;
+            const timeSlider = document.getElementById('time-slider');
+            const selectedHour = parseInt(timeSlider.value);
+            const selectedTime = selectedHour.toString().padStart(2, '0') + ':00';
+            const selectedDateTime = `${selectedDate}T${selectedTime}`;
+            const dataType = document.getElementById('data-type').value;
+            
+            // Update time display
+            document.getElementById('time-display').textContent = selectedTime;
+            
+            // Update legend
+            updateLegend(dataType);
 
-  // Convert the data object to array while preserving city names
-  const filteredData = Object.entries(data)
-    .filter(([cityName, cityData]) => {
-      const hourlyData = cityData.hourly;
-      // Find the index of the matching datetime in the time array
-      const dateIndex = hourlyData.time.findIndex(timeString => 
-        timeString === selectedDateTime
-      );
-      // Only include points where we found a matching time and valid pressure data
-      if (dateIndex === -1) return false;
-      const pressure = hourlyData.pressure_msl[dateIndex];
-      return pressure != null && !isNaN(pressure) && isFinite(pressure);
-    })
-    .map(([cityName, cityData]) => {
-      const dateIndex = cityData.hourly.time.findIndex(timeString => 
-        timeString === selectedDateTime
-      );
-      
-      // Return the properly structured data object with city name from the key
-      return {
-        city: cityName,
-        latitude: cityData.latitude,
-        longitude: cityData.longitude,
-        pressure: cityData.hourly.pressure_msl[dateIndex]
-      };
-    });
+            // Convert the data object to array while preserving city names
+            const filteredData = Object.entries(data)
+                .filter(([cityName, cityData]) => {
+                    const hourlyData = cityData.hourly;
+                    // Find the index of the matching datetime in the time array
+                    const dateIndex = hourlyData.time.findIndex(timeString => 
+                        timeString === selectedDateTime
+                    );
+                    // Only include points where we found a matching time and valid data
+                    if (dateIndex === -1) return false;
+                    const value = getDataField(cityData, dataType, dateIndex);
+                    return value != null && !isNaN(value) && isFinite(value);
+                })
+                .map(([cityName, cityData]) => {
+                    const dateIndex = cityData.hourly.time.findIndex(timeString => 
+                        timeString === selectedDateTime
+                    );
+                    
+                    const value = getDataField(cityData, dataType, dateIndex);
+                    
+                    // Return the properly structured data object
+                    return {
+                        city: cityName,
+                        latitude: cityData.latitude,
+                        longitude: cityData.longitude,
+                        value: value,
+                        dataType: dataType
+                    };
+                });
 
-  // Clear existing markers 
-  map.eachLayer(layer => {
-    if (layer instanceof L.CircleMarker) {
-      map.removeLayer(layer);
-    }
-  });
+            // Clear existing markers 
+            map.eachLayer(layer => {
+                if (layer instanceof L.CircleMarker) {
+                    map.removeLayer(layer);
+                }
+            });
 
-  // Add markers for the filtered data
-  filteredData.forEach(point => {
-    L.circleMarker([point.latitude, point.longitude], {
-      radius: 8,
-      fillColor: getColor(point.pressure),
-      color: '#000',
-      weight: 1,
-      opacity: 1,
-      fillOpacity: 0.8
-    }).addTo(map)
-      .bindPopup(`<b>${point.city}</b><br>Pressure: ${formatPressure(point.pressure)} hPa`);
-  });
-}
+            // Add markers for the filtered data
+            filteredData.forEach(point => {
+                const dataTypeLabel = dataType.charAt(0).toUpperCase() + dataType.slice(1);
+                L.circleMarker([point.latitude, point.longitude], {
+                    radius: 8,
+                    fillColor: getColor(point.value, dataType),
+                    color: '#000',
+                    weight: 1,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).addTo(map)
+                  .bindPopup(`<b>${point.city}</b><br>${dataTypeLabel}: ${formatValue(point.value, dataType)}`);
+            });
+        }
+        
+        // Animation functions
+        function startAnimation() {
+            if (isAnimating) return;
+            
+            isAnimating = true;
+            const playButton = document.getElementById('play-pause-btn');
+            playButton.innerHTML = '⏸️ Pause';
+            
+            const timeSlider = document.getElementById('time-slider');
+            
+            animationInterval = setInterval(() => {
+                let currentHour = parseInt(timeSlider.value);
+                currentHour = (currentHour + 1) % 24;
+                timeSlider.value = currentHour;
+                updateMap();
+            }, 500); // Update every 500ms
+        }
+        
+        function stopAnimation() {
+            if (!isAnimating) return;
+            
+            isAnimating = false;
+            const playButton = document.getElementById('play-pause-btn');
+            playButton.innerHTML = '▶️ Play Animation';
+            
+            if (animationInterval) {
+                clearInterval(animationInterval);
+                animationInterval = null;
+            }
+        }
+        
+        function toggleAnimation() {
+            if (isAnimating) {
+                stopAnimation();
+            } else {
+                startAnimation();
+            }
+        }
+        
+        function resetControls() {
+            stopAnimation();
+            document.getElementById('time-slider').value = 12;
+            document.getElementById('data-type').value = 'pressure';
+            
+            // Set date to yesterday to ensure data is available
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            document.getElementById('date-select').value = yesterday.toISOString().split('T')[0];
+            
+            updateMap();
+        }
 
-        // Add event listeners to date and time selectors
+        // Set default date to yesterday to ensure data is available
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        document.getElementById('date-select').value = yesterday.toISOString().split('T')[0];
+        
+        // Check available data fields and update dropdown
+        checkAvailableDataFields();
+        
+        // Add event listeners to controls
         document.getElementById('date-select').addEventListener('change', updateMap);
-        document.getElementById('time-select').addEventListener('change', updateMap);
+        document.getElementById('time-slider').addEventListener('input', updateMap);
+        document.getElementById('data-type').addEventListener('change', updateMap);
+        document.getElementById('play-pause-btn').addEventListener('click', toggleAnimation);
+        document.getElementById('reset-btn').addEventListener('click', resetControls);
+        
+        // Initial map update
+        updateMap();
 
       } catch (error) {
         console.error('Error loading pressure map:', error);

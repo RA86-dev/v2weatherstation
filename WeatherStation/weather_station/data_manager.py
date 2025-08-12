@@ -365,8 +365,8 @@ class WeatherDataManager:
                 'timezone': 'auto'
             }
             
-            # Use official Open-Meteo API for better data coverage during updates
-            api_url = "https://api.open-meteo.com/v1/forecast"
+            # Use configured backend API for data updates
+            api_url = f"{self.config.effective_open_meteo_url}/v1/forecast"
             
             response = requests.get(api_url, params=params, timeout=10)
             response.raise_for_status()
@@ -389,6 +389,12 @@ class WeatherDataManager:
                     else:
                         cleaned_hourly[param] = values
                 data['hourly'] = cleaned_hourly
+            
+            # Add metadata for mapping interface
+            data['city'] = city
+            data['coordinates'] = coordinates
+            data['latitude'] = latitude
+            data['longitude'] = longitude
             
             return data
             

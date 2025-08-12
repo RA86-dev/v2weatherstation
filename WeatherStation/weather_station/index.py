@@ -210,12 +210,12 @@ class WeatherStationApp:
         
         
         @self.app.get("/api/data/weather")
-        async def get_weather_data(limit: int = 50):
+        async def get_weather_data(limit: int = 300):
             """Get live weather data for multiple locations"""
             start_time = time.time()
             
             # Validate and sanitize limit
-            limit = max(1, min(limit, 100))  # Between 1 and 100
+            limit = max(1, min(limit, 300))  # Between 1 and 300
             
             try:
                 if self.config.LIVE_DATA_ENABLED:

@@ -8,8 +8,9 @@
 set -e
 
 # Configuration
-API_KEY="${API_KEY:-wx_admin_2025_secure_key_v1_abc123}"
+API_KEY="${API_KEY:-f7210fde-dbab-4719-94ba-04bf90cc6b01}"
 WEATHER_STATION_URL="${WEATHER_STATION_URL:-http://localhost:8110}"
+BACKEND_URL="${BACKEND_URL:-https://backend.weatherbox.org}"
 TIMEOUT="${TIMEOUT:-300}"  # 5 minutes
 
 # Colors for output
@@ -70,7 +71,7 @@ get_current_status() {
 # Function to trigger update
 trigger_update() {
     echo_info "Triggering secure data update..."
-    echo_info "This may take several minutes to fetch data for 240+ locations..."
+    echo_info "This may take several minutes to fetch data for 240+ locations from $BACKEND_URL..."
     
     # Show spinner while updating
     {

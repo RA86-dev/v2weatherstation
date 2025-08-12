@@ -34,8 +34,8 @@ services:
     environment:
       - WEATHER_STATION_HOST=0.0.0.0
       - WEATHER_STATION_PORT=8110
-      - OPEN_METEO_API_URL=http://open-meteo:8080
-      - USE_SELF_HOSTED=true
+      - OPEN_METEO_API_URL=https://backend.weatherbox.org
+      - USE_SELF_HOSTED=false
       - LIVE_DATA_ENABLED=false
       - AUTO_UPDATE_ENABLED=true
       - DATA_UPDATE_INTERVAL=604800
@@ -43,9 +43,7 @@ services:
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
       - API_KEY=f7210fde-dbab-4719-94ba-04bf90cc6b01
-    depends_on:
-      open-meteo:
-        condition: service_healthy
+    # No dependencies - uses external backend.weatherbox.org
     volumes:
       - ./assets:/app/assets
       - ./updaters:/app/updaters:ro

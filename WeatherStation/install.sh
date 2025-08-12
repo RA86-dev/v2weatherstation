@@ -248,7 +248,7 @@ main() {
     # Ask about Open-Meteo self-hosting
     echo ""
     read -p "Do you want to enable Open-Meteo self-hosting? (y/N): " SELF_HOST_OPTION
-    SELF_HOST_OPTION=${SELF_HOST_OPTION,,} # lowercase
+    SELF_HOST_OPTION=$(echo "$SELF_HOST_OPTION" | tr '[:upper:]' '[:lower:]') # lowercase
     
     if [[ "$SELF_HOST_OPTION" == "y" ]]; then
         echo -e "  Open-Meteo API Port: ${GREEN}${DEFAULT_OPEN_METEO_PORT}${NC}"
@@ -257,7 +257,7 @@ main() {
     
     echo ""
     read -p "Proceed with installation? (Y/n): " confirm
-    confirm=${confirm,,}
+    confirm=$(echo "$confirm" | tr '[:upper:]' '[:lower:]')
     
     if [[ "$confirm" == "n" ]]; then
         echo "Installation cancelled."
