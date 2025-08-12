@@ -7,6 +7,8 @@ def thread_1():
     time.sleep(604800)
     os.system('./init-weather-data.sh')
     print(f'Finished Check!')
+    return
+
 def thread_main():
     main()
     return
