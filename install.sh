@@ -46,7 +46,7 @@ cd "$REPO_DIR/WeatherStation/weather_station"
 
 # Start the application
 echo "🚀 Starting Weather Station..."
-docker-compose up --build -d
+docker compose up --build -d
 
 echo ""
 echo -e "${GREEN}✅ SELF-HOSTED Installation Complete!${NC}"
@@ -63,8 +63,8 @@ echo "   • Weather data: http://localhost:8110/api/data/weather"
 echo "   • Locations: http://localhost:8110/api/data/locations"
 echo ""
 echo "🛠️  Management commands:"
-echo "   • View logs: docker-compose logs -f"
-echo "   • Stop: docker-compose down"
+echo "   • View logs: docker compose logs -f"
+echo "   • Stop: docker compose down"
 echo "   • Check Open-Meteo: curl http://localhost:8080/v1/forecast?latitude=40.7&longitude=-74.0"
 echo ""
 echo -e "${GREEN}🎉 Enjoy your SELF-HOSTED Weather Station!${NC}"

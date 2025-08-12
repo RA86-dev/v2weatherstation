@@ -36,16 +36,16 @@ After installation, wait 2-3 minutes for Open-Meteo to initialize, then open:
 
 ```bash
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Stop the service
-docker-compose down
+docker compose down
 
 # Restart
-docker-compose restart
+docker compose restart
 
 # Update to latest version
-git pull && docker-compose up --build -d
+git pull && docker compose up --build -d
 ```
 
 ## 📊 API Endpoints
@@ -79,7 +79,7 @@ environment:
 
 **Service not starting?**
 ```bash
-docker-compose logs
+docker compose logs
 ```
 
 **Data not loading?**

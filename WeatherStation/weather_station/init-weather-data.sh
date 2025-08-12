@@ -10,7 +10,7 @@ sleep 10
 # Check if Open-Meteo is running (using correct container name)
 if ! docker ps | grep -q weather_station_openmeteo; then
     echo "❌ Open-Meteo container is not running!"
-    echo "ℹ️  Make sure to start the containers first with: docker-compose up -d"
+    echo "ℹ️  Make sure to start the containers first with: docker compose up -d"
     exit 1
 fi
 
