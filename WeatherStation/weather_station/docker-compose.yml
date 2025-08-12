@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   open-meteo:
     image: ghcr.io/open-meteo/open-meteo:latest
@@ -15,14 +17,8 @@ services:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/v1/forecast?latitude=40.7&longitude=-74.0 || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
       start_period: 120s
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 512M
 
   weather-station:
     build: 
@@ -35,29 +31,24 @@ services:
       - WEATHER_STATION_HOST=0.0.0.0
       - WEATHER_STATION_PORT=8110
       - OPEN_METEO_API_URL=http://open-meteo:8080
-      - USE_SELF_HOSTED=true
-      - LIVE_DATA_ENABLED=true
-      - AUTO_UPDATE_ENABLED=false
-      - DATA_UPDATE_INTERVAL=604800
       - DEBUG=false
-      - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
-      - API_KEY=f7210fde-dbab-4719-94ba-04bf90cc6b01
-    depends_on:
-      - open-meteo
     volumes:
       - ./assets:/app/assets
       - ./updaters:/app/updaters:ro
       - weather-station-logs:/app/logs
+    depends_on:
+      open-meteo:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - weather_station_network
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8110/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 volumes:
   open-meteo-data:
@@ -68,6 +59,3 @@ volumes:
 networks:
   weather_station_network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
