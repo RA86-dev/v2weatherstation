@@ -25,7 +25,7 @@ echo "✅ Created data directories"
 
 # Build and start the services
 echo "🚀 Starting self-hosted Open-Meteo and Weather Station..."
-echo "   - Open-Meteo API will be available at: http://localhost:8081"
+echo "   - Open-Meteo API will be available at: http://localhost:8080"
 echo "   - Weather Station will be available at: http://localhost:8110"
 
 docker-compose up --build -d

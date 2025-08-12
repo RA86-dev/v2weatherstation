@@ -7,9 +7,10 @@ echo "==============================================="
 echo "⏳ Waiting for Open-Meteo container to start..."
 sleep 10
 
-# Check if Open-Meteo is running
-if ! docker ps | grep -q open-meteo-api; then
+# Check if Open-Meteo is running (using correct container name)
+if ! docker ps | grep -q weather_station_openmeteo; then
     echo "❌ Open-Meteo container is not running!"
+    echo "ℹ️  Make sure to start the containers first with: docker-compose up -d"
     exit 1
 fi
 
@@ -108,6 +109,7 @@ fi
 echo ""
 echo "🎉 Weather data initialization complete!"
 echo "🌐 Open-Meteo API is ready at: http://localhost:8080"
+echo "📊 Weather Station is available at: http://localhost:8110"
 echo ""
 echo "Test with:"
 echo "curl 'http://localhost:8080/v1/forecast?latitude=40.7&longitude=-74.0&hourly=temperature_2m'"
