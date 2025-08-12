@@ -20,3 +20,7 @@ class Config:
 
 # Global config instance
 config = Config()
+
+# Legacy function for backward compatibility
+def get_config():
+    return config
