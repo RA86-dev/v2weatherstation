@@ -244,7 +244,7 @@
         function mode(arr) {
             const counts = {};
             let maxCount = 0;
-            let modeValue = arr[0];
+            let modeValue = arr.length > 0 ? arr[0] : null;
             
             arr.forEach(value => {
                 counts[value] = (counts[value] || 0) + 1;

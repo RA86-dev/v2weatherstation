@@ -133,8 +133,21 @@
         // Utility function to filter out null/undefined values while keeping time alignment
         function filterDataWithTime(timeArray, dataArray) {
             const filtered = { time: [], data: [] };
+            
+            // Safety checks
+            if (!timeArray || !dataArray || !Array.isArray(timeArray) || !Array.isArray(dataArray)) {
+                console.warn('Invalid arrays provided to filterDataWithTime');
+                return filtered;
+            }
+            
+            if (timeArray.length === 0 || dataArray.length === 0) {
+                console.warn('Empty arrays provided to filterDataWithTime');
+                return filtered;
+            }
+            
             for (let i = 0; i < timeArray.length; i++) {
-                if (dataArray[i] != null && !isNaN(dataArray[i]) && isFinite(dataArray[i])) {
+                // Check if index exists in dataArray
+                if (i < dataArray.length && dataArray[i] != null && !isNaN(dataArray[i]) && isFinite(dataArray[i])) {
                     filtered.time.push(timeArray[i]);
                     filtered.data.push(dataArray[i]);
                 }
@@ -148,7 +161,19 @@
             const param1 = param1Select.value;
             const param2 = param2Select.value;
 
+            // Safety checks
+            if (!data || !data[selectedLocation]) {
+                console.error(`No data available for location: ${selectedLocation}`);
+                plotDiv.innerHTML = '<div class="alert alert-warning">No data available for selected location</div>';
+                return;
+            }
+
             const locationData = data[selectedLocation].hourly;
+            if (!locationData) {
+                console.error(`No hourly data available for location: ${selectedLocation}`);
+                plotDiv.innerHTML = '<div class="alert alert-warning">No hourly data available for selected location</div>';
+                return;
+            }
             
             // Filter null values while maintaining time alignment
             const param1Filtered = filterDataWithTime(locationData.time, locationData[param1]);

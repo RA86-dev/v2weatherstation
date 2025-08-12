@@ -165,11 +165,23 @@
 
         // Check available data fields and update dropdown
         function checkAvailableDataFields() {
-            if (!data || Object.keys(data).length === 0) return;
+            if (!data || typeof data !== 'object' || Object.keys(data).length === 0) {
+                console.warn('No weather data available for field checking');
+                return;
+            }
             
             // Get first city's data to check available fields
-            const firstCity = Object.values(data)[0];
-            if (!firstCity || !firstCity.hourly) return;
+            const dataValues = Object.values(data);
+            if (dataValues.length === 0) {
+                console.warn('No cities found in weather data');
+                return;
+            }
+            
+            const firstCity = dataValues[0];
+            if (!firstCity || !firstCity.hourly) {
+                console.warn('First city has no hourly data');
+                return;
+            }
             
             const hourlyData = firstCity.hourly;
             const dataTypeSelect = document.getElementById('data-type');
@@ -244,16 +256,22 @@
             
             switch(dataType) {
                 case 'pressure':
-                    return hourlyData.pressure_msl ? hourlyData.pressure_msl[dateIndex] : null;
+                    if (hourlyData.pressure_msl && Array.isArray(hourlyData.pressure_msl) && dateIndex < hourlyData.pressure_msl.length) {
+                        return hourlyData.pressure_msl[dateIndex];
+                    }
+                    return null;
                 case 'temperature':
-                    return hourlyData.temperature_2m ? hourlyData.temperature_2m[dateIndex] : null;
+                    if (hourlyData.temperature_2m && Array.isArray(hourlyData.temperature_2m) && dateIndex < hourlyData.temperature_2m.length) {
+                        return hourlyData.temperature_2m[dateIndex];
+                    }
+                    return null;
                 case 'humidity':
                     // Check multiple possible field names for humidity
-                    if (hourlyData.relativehumidity_2m) {
+                    if (hourlyData.relativehumidity_2m && Array.isArray(hourlyData.relativehumidity_2m) && dateIndex < hourlyData.relativehumidity_2m.length) {
                         return hourlyData.relativehumidity_2m[dateIndex];
-                    } else if (hourlyData.relative_humidity_2m) {
+                    } else if (hourlyData.relative_humidity_2m && Array.isArray(hourlyData.relative_humidity_2m) && dateIndex < hourlyData.relative_humidity_2m.length) {
                         return hourlyData.relative_humidity_2m[dateIndex];
-                    } else if (hourlyData.humidity) {
+                    } else if (hourlyData.humidity && Array.isArray(hourlyData.humidity) && dateIndex < hourlyData.humidity.length) {
                         return hourlyData.humidity[dateIndex];
                     } else {
                         // If no humidity data available, return null

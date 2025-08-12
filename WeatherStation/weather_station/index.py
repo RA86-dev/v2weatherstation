@@ -12,9 +12,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from config import get_config
-from data_manager import get_data_manager, start_data_manager, stop_data_manager
-from live_data_manager import get_live_data_manager
+from .config import get_config
+from .data_manager import get_data_manager, start_data_manager, stop_data_manager
+from .live_data_manager import get_live_data_manager
 
 # Setup logging
 config = get_config()
@@ -536,8 +536,7 @@ def create_app() -> FastAPI:
 
 # Initialize the application
 app = create_app()
-
-if __name__ == "__main__":
+def main():
     import uvicorn
     
     # Validate configuration before starting
@@ -552,10 +551,13 @@ if __name__ == "__main__":
     
     # Run the server
     uvicorn.run(
-        "index:app",
+        "WeatherStation.weather_station.index:app",
         host=config.HOST,
         port=config.PORT,
         log_level=config.LOG_LEVEL.lower(),
         reload=config.DEBUG,
         access_log=True
     )
+
+if __name__ == "__main__":
+    main()

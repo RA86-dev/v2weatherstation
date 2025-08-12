@@ -11,7 +11,7 @@ from typing import Dict, Optional, List
 import requests
 from datetime import datetime
 
-from config import get_config
+from .config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +127,8 @@ class LiveWeatherDataManager:
                 'hourly': ','.join(weather_params),
                 'past_days': 1,  # Only get recent data for live fetching
                 'forecast_days': 7,  # Get 7 days of forecast
-                'timezone': 'auto'
+                'timezone': 'auto',
+                'models': 'ecmwf_ifs025,ncep_gfs025,meteofrance_arpege_world025'  # Specify available models
             }
             
             api_url = f"{self.config.effective_open_meteo_url}/v1/forecast"
@@ -137,6 +138,9 @@ class LiveWeatherDataManager:
             response.raise_for_status()
             
             data = response.json()
+            
+            # Normalize field names from model-specific to generic
+            data = self._normalize_field_names(data)
             
             # Add metadata
             data['city'] = city
@@ -156,6 +160,45 @@ class LiveWeatherDataManager:
         except Exception as e:
             logger.warning(f"Failed to fetch live data for {city}: {e}")
             return None
+    
+    def _normalize_field_names(self, data):
+        """Normalize model-specific field names to generic field names"""
+        if not data or 'hourly' not in data:
+            return data
+        
+        hourly = data['hourly']
+        normalized_hourly = {}
+        
+        # Field name mapping patterns - from model-specific to generic
+        field_mappings = {
+            'temperature_2m': ['temperature_2m_ecmwf_ifs025', 'temperature_2m_ncep_gfs025', 'temperature_2m_meteofrance_arpege_world025'],
+            'relative_humidity_2m': ['relative_humidity_2m_ecmwf_ifs025', 'relative_humidity_2m_ncep_gfs025', 'relative_humidity_2m_meteofrance_arpege_world025'],
+            'pressure_msl': ['pressure_msl_ecmwf_ifs025', 'pressure_msl_ncep_gfs025', 'pressure_msl_meteofrance_arpege_world025'],
+            'wind_speed_10m': ['wind_speed_10m_ecmwf_ifs025', 'wind_speed_10m_ncep_gfs025', 'wind_speed_10m_meteofrance_arpege_world025'],
+            'wind_direction_10m': ['wind_direction_10m_ecmwf_ifs025', 'wind_direction_10m_ncep_gfs025', 'wind_direction_10m_meteofrance_arpege_world025'],
+            'precipitation': ['precipitation_ecmwf_ifs025', 'precipitation_ncep_gfs025', 'precipitation_meteofrance_arpege_world025'],
+            'dew_point_2m': ['dew_point_2m_ecmwf_ifs025', 'dew_point_2m_ncep_gfs025', 'dew_point_2m_meteofrance_arpege_world025'],
+            'apparent_temperature': ['apparent_temperature_ecmwf_ifs025', 'apparent_temperature_ncep_gfs025', 'apparent_temperature_meteofrance_arpege_world025']
+        }
+        
+        # Copy time field
+        if 'time' in hourly:
+            normalized_hourly['time'] = hourly['time']
+        
+        # Normalize field names
+        for generic_name, model_specific_names in field_mappings.items():
+            for model_specific_name in model_specific_names:
+                if model_specific_name in hourly:
+                    normalized_hourly[generic_name] = hourly[model_specific_name]
+                    break  # Use first available model
+        
+        # Copy any fields that don't need normalization
+        for field_name, field_data in hourly.items():
+            if field_name not in normalized_hourly and not any(field_name in models for models in field_mappings.values()):
+                normalized_hourly[field_name] = field_data
+        
+        data['hourly'] = normalized_hourly
+        return data
     
     def get_current_conditions(self, city: str) -> Optional[Dict]:
         """Get current weather conditions for a specific city"""
@@ -194,8 +237,9 @@ class LiveWeatherDataManager:
             params = {
                 'latitude': 40.7,
                 'longitude': -74.0,
-                'hourly': 'temperature_2m',
-                'forecast_days': 1
+                'hourly': 'temperature_2m,relative_humidity_2m,pressure_msl,wind_speed_10m',
+                'forecast_days': 1,
+                'models': 'ecmwf_ifs025,ncep_gfs025,meteofrance_arpege_world025'
             }
             
             start_time = time.time()

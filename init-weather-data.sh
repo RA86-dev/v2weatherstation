@@ -8,7 +8,7 @@ echo "⏳ Waiting for Open-Meteo container to start..."
 sleep 10
 
 # Check if Open-Meteo is running
-if ! docker ps | grep -q open-meteo-api; then
+if ! docker ps | grep -q openmeteo-api; then
     echo "❌ Open-Meteo container is not running!"
     exit 1
 fi
@@ -24,10 +24,11 @@ echo "🌍 Downloading global weather model data for worldwide coverage..."
 # 1. ECMWF IFS 0.25° Global (best global coverage, 10 days forecast)
 echo "⬇️  Downloading ECMWF IFS Global model (worldwide coverage)..."
 docker run --rm \
-    -v open-meteo-data:/app/data \
+    -v openmeteo-api:/app/data \
     ghcr.io/open-meteo/open-meteo \
     sync ecmwf_ifs025 \
-    temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,pressure_msl,surface_pressure,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,rain,showers,snowfall
+    temperature_2m,relative_humidity_2m,pressure_msl,wind_speed_10m,wind_direction_10m,precipitation \
+    --past-days 3
 
 if [ $? -eq 0 ]; then
     echo "✅ ECMWF IFS Global model downloaded successfully"
@@ -38,10 +39,11 @@ fi
 # 2. NOAA GFS 0.25° (Global Forecast System - worldwide, 16 days)
 echo "⬇️  Downloading NOAA GFS 0.25° model (worldwide coverage)..."
 docker run --rm \
-    -v open-meteo-data:/app/data \
+    -v openmeteo-api:/app/data \
     ghcr.io/open-meteo/open-meteo \
     sync ncep_gfs025 \
-    temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,pressure_msl,surface_pressure,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,rain,showers,snowfall
+    temperature_2m,relative_humidity_2m,pressure_msl,wind_speed_10m,wind_direction_10m,precipitation \
+    --past-days 3
 
 if [ $? -eq 0 ]; then
     echo "✅ NOAA GFS 0.25° model downloaded successfully"
@@ -52,10 +54,11 @@ fi
 # 3. MeteoFrance ARPEGE World 0.25° (global coverage)
 echo "⬇️  Downloading MeteoFrance ARPEGE World model..."
 docker run --rm \
-    -v open-meteo-data:/app/data \
+    -v openmeteo-api:/app/data \
     ghcr.io/open-meteo/open-meteo \
     sync meteofrance_arpege_world025 \
-    temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,pressure_msl,surface_pressure,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,rain,showers,snowfall
+    temperature_2m,relative_humidity_2m,pressure_msl,wind_speed_10m,wind_direction_10m,precipitation \
+    --past-days 3
 
 if [ $? -eq 0 ]; then
     echo "✅ MeteoFrance ARPEGE World model downloaded successfully"
@@ -66,10 +69,11 @@ fi
 # 4. JMA GSM (Japan Meteorological Agency Global Spectral Model - Asia/Pacific coverage)
 echo "⬇️  Downloading JMA GSM model (Asia/Pacific coverage)..."
 docker run --rm \
-    -v open-meteo-data:/app/data \
+    -v openmeteo-api:/app/data \
     ghcr.io/open-meteo/open-meteo \
     sync jma_gsm \
-    temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,pressure_msl,surface_pressure,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,rain,showers,snowfall
+    temperature_2m,relative_humidity_2m,pressure_msl,wind_speed_10m,wind_direction_10m,precipitation \
+    --past-days 3
 
 if [ $? -eq 0 ]; then
     echo "✅ JMA GSM model downloaded successfully"
@@ -80,10 +84,11 @@ fi
 # 5. CMA GRAPES Global (China Meteorological Administration - global coverage)
 echo "⬇️  Downloading CMA GRAPES Global model..."
 docker run --rm \
-    -v open-meteo-data:/app/data \
+    -v openmeteo-api:/app/data \
     ghcr.io/open-meteo/open-meteo \
     sync cma_grapes_global \
-    temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,pressure_msl,surface_pressure,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,rain,showers,snowfall
+    temperature_2m,relative_humidity_2m,pressure_msl,wind_speed_10m,wind_direction_10m,precipitation \
+    --past-days 3
 
 if [ $? -eq 0 ]; then
     echo "✅ CMA GRAPES Global model downloaded successfully"
@@ -94,10 +99,11 @@ fi
 # 6. BOM ACCESS Global (Australian Bureau of Meteorology - global coverage)
 echo "⬇️  Downloading BOM ACCESS Global model..."
 docker run --rm \
-    -v open-meteo-data:/app/data \
+    -v openmeteo-api:/app/data \
     ghcr.io/open-meteo/open-meteo \
     sync bom_access_global \
-    temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,pressure_msl,surface_pressure,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,rain,showers,snowfall
+    temperature_2m,relative_humidity_2m,pressure_msl,wind_speed_10m,wind_direction_10m,precipitation \
+    --past-days 3
 
 if [ $? -eq 0 ]; then
     echo "✅ BOM ACCESS Global model downloaded successfully"

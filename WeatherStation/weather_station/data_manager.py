@@ -15,7 +15,7 @@ from typing import Dict, Optional, Tuple, List
 import logging
 import subprocess
 
-from config import get_config
+from .config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -355,7 +355,7 @@ class WeatherDataManager:
                 'soil_temperature_0cm', 'soil_moisture_0_to_1cm'
             ]
             
-            # Build API URL for official Open-Meteo API
+            # Build API URL for configured Open-Meteo API
             params = {
                 'latitude': latitude,
                 'longitude': longitude,
@@ -365,6 +365,10 @@ class WeatherDataManager:
                 'timezone': 'auto'
             }
             
+            # Add models parameter if using self-hosted API
+            if 'localhost' in self.config.effective_open_meteo_url:
+                params['models'] = 'ecmwf_ifs025,ncep_gfs025,meteofrance_arpege_world025'
+            
             # Use configured backend API for data updates
             api_url = f"{self.config.effective_open_meteo_url}/v1/forecast"
             
@@ -372,6 +376,9 @@ class WeatherDataManager:
             response.raise_for_status()
             
             data = response.json()
+            
+            # Normalize field names from model-specific to generic
+            data = self._normalize_field_names(data)
             
             # Clean null values from the data
             if 'hourly' in data:
@@ -402,6 +409,44 @@ class WeatherDataManager:
             logger.warning(f"Failed to fetch live data for {city}: {e}")
             return None
     
+    def _normalize_field_names(self, data):
+        """Normalize model-specific field names to generic field names"""
+        if not data or 'hourly' not in data:
+            return data
+        
+        hourly = data['hourly']
+        normalized_hourly = {}
+        
+        # Field name mapping patterns - from model-specific to generic
+        field_mappings = {
+            'temperature_2m': ['temperature_2m_ecmwf_ifs025', 'temperature_2m_ncep_gfs025', 'temperature_2m_meteofrance_arpege_world025'],
+            'relative_humidity_2m': ['relative_humidity_2m_ecmwf_ifs025', 'relative_humidity_2m_ncep_gfs025', 'relative_humidity_2m_meteofrance_arpege_world025'],
+            'pressure_msl': ['pressure_msl_ecmwf_ifs025', 'pressure_msl_ncep_gfs025', 'pressure_msl_meteofrance_arpege_world025'],
+            'wind_speed_10m': ['wind_speed_10m_ecmwf_ifs025', 'wind_speed_10m_ncep_gfs025', 'wind_speed_10m_meteofrance_arpege_world025'],
+            'wind_direction_10m': ['wind_direction_10m_ecmwf_ifs025', 'wind_direction_10m_ncep_gfs025', 'wind_direction_10m_meteofrance_arpege_world025'],
+            'precipitation': ['precipitation_ecmwf_ifs025', 'precipitation_ncep_gfs025', 'precipitation_meteofrance_arpege_world025'],
+            'dew_point_2m': ['dew_point_2m_ecmwf_ifs025', 'dew_point_2m_ncep_gfs025', 'dew_point_2m_meteofrance_arpege_world025'],
+            'apparent_temperature': ['apparent_temperature_ecmwf_ifs025', 'apparent_temperature_ncep_gfs025', 'apparent_temperature_meteofrance_arpege_world025']
+        }
+        
+        # Copy time field
+        if 'time' in hourly:
+            normalized_hourly['time'] = hourly['time']
+        
+        # Normalize field names
+        for generic_name, model_specific_names in field_mappings.items():
+            for model_specific_name in model_specific_names:
+                if model_specific_name in hourly:
+                    normalized_hourly[generic_name] = hourly[model_specific_name]
+                    break  # Use first available model
+        
+        # Copy any fields that don't need normalization
+        for field_name, field_data in hourly.items():
+            if field_name not in normalized_hourly and not any(field_name in models for models in field_mappings.values()):
+                normalized_hourly[field_name] = field_data
+        
+        data['hourly'] = normalized_hourly
+        return data
     
     def get_status(self) -> Dict:
         """Get current status of data manager"""
