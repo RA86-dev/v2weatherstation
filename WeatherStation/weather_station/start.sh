@@ -1,9 +1,9 @@
 #!/bin/bash
 
-echo "🌤️  Starting Weather Station v2.0 - SELF-HOSTED"
-echo "=============================================="
+echo "🌤️  Weather Station Self-Hosted Setup"
+echo "====================================="
 
-# Check Docker
+# Check if Docker is running
 if ! docker info > /dev/null 2>&1; then
     echo "❌ Docker is not running. Please start Docker first."
     exit 1
@@ -11,36 +11,54 @@ fi
 
 echo "✅ Docker is running"
 
-# Create data directory
+# Check if docker-compose is available
+if ! command -v docker-compose &> /dev/null; then
+    echo "❌ docker-compose not found. Please install docker-compose."
+    exit 1
+fi
+
+echo "✅ docker-compose found"
+
+# Create data directory for Open-Meteo
 mkdir -p data/open-meteo
 echo "✅ Created data directories"
 
-# Start the application
-echo "🚀 Building and starting self-hosted Weather Station..."
-echo "   • Open-Meteo API will start at: http://localhost:8080"
-echo "   • Weather Station will start at: http://localhost:8110"
-docker compose up --build -d
+# Build and start the services
+echo "🚀 Starting self-hosted Open-Meteo and Weather Station..."
+echo "   - Open-Meteo API will be available at: http://localhost:8081"
+echo "   - Weather Station will be available at: http://localhost:8110"
+
+docker-compose up --build -d
 
 if [ $? -eq 0 ]; then
     echo ""
-    echo "✅ Self-hosted Weather Station is starting!"
+    echo "✅ Services started successfully!"
     echo ""
-    echo "⏳ IMPORTANT: Open-Meteo needs 2-3 minutes to initialize"
-    echo "   Please wait before accessing the weather station"
+    echo "📥 Initializing weather data (this may take a few minutes)..."
+    echo "   You can skip this step and the API will work with live requests"
+    echo "   but having local data improves performance significantly."
     echo ""
-    echo "🌐 Access URLs:"
-    echo "   • Weather Station: http://localhost:8110"
-    echo "   • Open-Meteo API: http://localhost:8080"
-    echo "   • API Status: http://localhost:8110/api/status"
+    read -p "Initialize weather data now? (y/n): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        ./init-weather-data.sh
+    else
+        echo "⚠️  Skipping data initialization. API will fetch data on-demand."
+    fi
     echo ""
-    echo "🛠️  Management:"
-    echo "   • View logs: docker compose logs -f"
-    echo "   • Stop: docker compose down"
-    echo "   • Check Open-Meteo: curl http://localhost:8080/v1/forecast?latitude=40.7&longitude=-74.0"
+    echo "🌐 Access your weather station at: http://localhost:8110"
+    echo "🔧 API endpoints:"
+    echo "   - Health check: http://localhost:8110/health"
+    echo "   - API status: http://localhost:8110/api/status"
+    echo "   - Live data: http://localhost:8110/api/data/live/{city}"
+    echo "   - All locations: http://localhost:8110/api/data/locations"
     echo ""
-    echo "📥 Optional: Initialize weather data for better performance"
-    echo "   ./init-weather-data.sh"
+    echo "📊 You can monitor the services with:"
+    echo "   docker-compose logs -f"
+    echo ""
+    echo "🛑 To stop the services:"
+    echo "   docker-compose down"
 else
-    echo "❌ Failed to start services. Check logs:"
-    echo "   docker compose logs"
+    echo "❌ Failed to start services. Check the logs with:"
+    echo "   docker-compose logs"
 fi
