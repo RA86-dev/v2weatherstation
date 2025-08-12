@@ -83,12 +83,18 @@ class WeatherAPI:
         for city, coords in locations.items():
             if count >= limit:
                 break
+            
+            # Handle both array format [lat, lon] and dict format
+            if isinstance(coords, list) and len(coords) >= 2:
+                lat, lon = coords[0], coords[1]
+            elif isinstance(coords, dict):
+                lat = coords.get('latitude')
+                lon = coords.get('longitude')
+            else:
+                logger.warning(f"Invalid coordinates format for {city}: {coords}")
+                continue
                 
-            weather_data = self.get_weather_for_city(
-                city, 
-                coords.get('latitude'), 
-                coords.get('longitude')
-            )
+            weather_data = self.get_weather_for_city(city, lat, lon)
             
             if weather_data:
                 results.append(weather_data)
@@ -100,16 +106,30 @@ class WeatherAPI:
     def get_all_locations(self) -> List[Dict]:
         """Get list of all available locations"""
         locations = self.load_locations()
-        return [
-            {
+        result = []
+        
+        for city, coords in locations.items():
+            # Handle both array format [lat, lon] and dict format
+            if isinstance(coords, list) and len(coords) >= 2:
+                lat, lon = coords[0], coords[1]
+                state, country = '', 'US'
+            elif isinstance(coords, dict):
+                lat = coords.get('latitude')
+                lon = coords.get('longitude') 
+                state = coords.get('state', '')
+                country = coords.get('country', 'US')
+            else:
+                continue
+                
+            result.append({
                 'city': city,
-                'latitude': coords.get('latitude'),
-                'longitude': coords.get('longitude'),
-                'state': coords.get('state', ''),
-                'country': coords.get('country', 'US')
-            }
-            for city, coords in locations.items()
-        ]
+                'latitude': lat,
+                'longitude': lon,
+                'state': state,
+                'country': country
+            })
+        
+        return result
 
 # Global instance
 weather_api = WeatherAPI()

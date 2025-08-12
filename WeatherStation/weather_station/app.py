@@ -92,18 +92,28 @@ async def get_weather_data(limit: int = 50):
         limit = max(1, min(limit, 100))  # Between 1 and 100
         
         logger.info(f"Fetching weather data for {limit} cities")
+        
+        # Check if locations load properly
+        locations = weather_api.load_locations()
+        if not locations:
+            raise HTTPException(status_code=500, detail="No locations available - check geolocations.json")
+        
+        logger.info(f"Loaded {len(locations)} locations")
         weather_data = weather_api.get_weather_for_multiple_cities(limit)
         
         return {
             "data": weather_data,
             "count": len(weather_data),
             "limit": limit,
+            "total_locations": len(locations),
             "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Failed to get weather data: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to get weather data: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.get("/api/data/live/{city}")
 async def get_live_city_data(city: str):
@@ -115,11 +125,17 @@ async def get_live_city_data(city: str):
             raise HTTPException(status_code=404, detail=f"City '{city}' not found")
         
         coords = locations[city]
-        weather_data = weather_api.get_weather_for_city(
-            city, 
-            coords.get('latitude'), 
-            coords.get('longitude')
-        )
+        
+        # Handle both array format [lat, lon] and dict format
+        if isinstance(coords, list) and len(coords) >= 2:
+            lat, lon = coords[0], coords[1]
+        elif isinstance(coords, dict):
+            lat = coords.get('latitude')
+            lon = coords.get('longitude')
+        else:
+            raise HTTPException(status_code=500, detail=f"Invalid coordinates format for {city}")
+        
+        weather_data = weather_api.get_weather_for_city(city, lat, lon)
         
         if not weather_data:
             raise HTTPException(status_code=500, detail="Failed to fetch weather data")
