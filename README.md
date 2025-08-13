@@ -1,4 +1,4 @@
-# Weather Station v2.0 - Self-Hosted Live Data Edition
+# Weather Station  - Self-Hosted Live Data Edition
 
 ![Weather Station](https://img.shields.io/badge/Weather-Station-blue?style=for-the-badge)
 ![Python](https://img.shields.io/badge/Python-3.11+-green?style=for-the-badge&logo=python)
@@ -37,3 +37,4 @@ docker build -t v2weatherstation:latest .
 docker run -p 8110:8110 v2weatherstation:latest
 
 ```
+# weatherstation-new
